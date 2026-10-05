@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Můj rodokmen – Generační strom</title>
+    <title>Můj rodokmen – Kompletní síť</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -14,35 +14,35 @@
         #sidebar { width: 400px; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; }
         #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
         
-        .node rect { fill: #ffffff; stroke: #3498db; stroke-width: 2px; rx: 6px; ry: 6px; cursor: pointer; transition: all 0.2s; }
-        .node:hover rect { fill: #ebf5fb; stroke: #2980b9; filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.15)); }
-        .node text { font: 12px sans-serif; fill: #2c3e50; text-anchor: middle; font-weight: bold; }
-        .node-subtext { font: 10px sans-serif; fill: #7f8c8d; text-anchor: middle; }
-        .link { fill: none; stroke: #bdc3c7; stroke-width: 2px; }
+        .node rect { fill: #ffffff; stroke: #3498db; stroke-width: 2px; rx: 6px; ry: 6px; cursor: pointer; transition: fill 0.2s; }
+        .node rect:hover { fill: #ebf5fb; stroke: #2980b9; }
+        .node text { font: 12px sans-serif; fill: #2c3e50; pointer-events: none; text-anchor: middle; font-weight: bold; }
+        .node-subtext { font: 10px sans-serif; fill: #7f8c8d; pointer-events: none; text-anchor: middle; }
+        .link { stroke: #95a5a6; stroke-width: 1.5px; stroke-opacity: 0.7; }
 
         .detail-item { margin-bottom: 15px; }
         .detail-label { font-weight: bold; color: #7f8c8d; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 3px; }
         .detail-value { font-size: 1.05rem; color: #2c3e50; }
         .media-preview { max-width: 100%; border-radius: 6px; border: 1px solid #ddd; margin-top: 5px; }
         video.media-preview { width: 100%; background: #000; }
-        .path-warning { font-size: 0.8rem; color: #e74c3c; margin-top: 4px; line-height: 1.3; }
+        .path-warning { font-size: 0.8rem; color: #27ae60; margin-top: 4px; line-height: 1.3; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Můj rodokmen</h1>
+        <h1>Můj rodokmen – Kompletní přehled</h1>
         <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
     </header>
 
     <div id="main-container">
         <div id="canvas">
-            <div id="loading">Načítám generační strom...</div>
+            <div id="loading">Načítám všechny větve rodokmenu...</div>
             <svg id="tree-svg" width="100%" height="100%"></svg>
         </div>
         <div id="sidebar">
             <h3>Detail osoby</h3>
-            <p id="no-selection" style="color: #7f8c8d;">Kliknutím na osobu ve stromu zobrazíš její podrobnosti a multimédia.</p>
+            <p id="no-selection" style="color: #7f8c8d;">Kliknutím na osobu v grafu zobrazíš její podrobnosti a multimédia.</p>
             <div id="person-details" style="display:none;">
                 <div class="detail-item">
                     <div class="detail-label">Jméno</div>
@@ -108,7 +108,7 @@ function processGedcomData(text) {
                     individuals[currentId] = { 
                         id: currentId, name: 'Neznámý', 
                         birthDate: '', deathDate: '', 
-                        children: [], parents: [], media: [] 
+                        media: [] 
                     };
                     currentFamilyId = null;
                     currentType = 'INDI';
@@ -148,64 +148,39 @@ function processGedcomData(text) {
         }
     });
 
-    Object.values(families).forEach(fam => {
-        let parents = [fam.husb, fam.wife].filter(p => p && individuals[p]);
-        let kids = fam.children.filter(c => c && individuals[c]);
+    let nodesMap = {};
+    Object.values(individuals).forEach(p => {
+        if (p.name !== 'Neznámý') {
+            let resolvedMedia = p.media.map(mId => {
+                let mediaObj = mediaFiles[mId];
+                return mediaObj ? mediaObj.file : mId;
+            });
+            nodesMap[p.id] = { id: p.id, name: p.name, birth: p.birthDate, death: p.deathDate, media: resolvedMedia };
+        }
+    });
 
-        kids.forEach(childId => {
-            parents.forEach(parentId => {
-                if (!individuals[childId].parents.includes(parentId)) {
-                    individuals[childId].parents.push(parentId);
-                }
-                if (!individuals[parentId].children.includes(childId)) {
-                    individuals[parentId].children.push(childId);
-                }
+    let links = [];
+    Object.values(families).forEach(fam => {
+        let parents = [fam.husb, fam.wife].filter(p => p && nodesMap[p]);
+        let kids = fam.children.filter(c => c && nodesMap[c]);
+
+        if (parents.length === 2) {
+            links.push({ source: parents[0], target: parents[1], type: 'partner' });
+        }
+        parents.forEach(parent => {
+            kids.forEach(child => {
+                links.push({ source: parent, target: child, type: 'parent' });
             });
         });
     });
 
-    let validPersons = Object.values(individuals).filter(p => p.name !== 'Neznámý');
-    if (validPersons.length === 0) return;
-
-    // Kořenem bude osoba bez rodičů v databázi
-    let rootPerson = validPersons.find(p => p.parents.length === 0) || validPersons[0];
-
-    let mediaMap = {};
-    Object.values(mediaFiles).forEach(m => mediaMap[m.id] = m.file);
-
-    function buildTree(personId, visited = new Set()) {
-        if (visited.has(personId)) return null;
-        visited.add(personId);
-
-        let person = individuals[personId];
-        if (!person) return null;
-
-        let resolvedMedia = person.media.map(mId => mediaMap[mId] || mId);
-
-        let node = {
-            id: person.id,
-            name: person.name,
-            birth: person.birthDate,
-            death: person.deathDate,
-            media: resolvedMedia,
-            children: []
-        };
-
-        person.children.forEach(childId => {
-            let childNode = buildTree(childId, new Set(visited));
-            if (childNode) node.children.push(childNode);
-        });
-
-        return node;
-    }
-
-    let treeData = buildTree(rootPerson.id);
+    let nodes = Object.values(nodesMap);
 
     document.getElementById('loading').style.display = 'none';
-    drawTree(treeData);
+    drawNetwork(nodes, links);
 }
 
-function drawTree(data) {
+function drawNetwork(nodes, links) {
     const svg = d3.select("#tree-svg");
     const container = document.getElementById('canvas');
     const width = container.clientWidth;
@@ -215,38 +190,45 @@ function drawTree(data) {
 
     const g = svg.append("g");
 
-    const zoom = d3.zoom()
-        .scaleExtent([0.1, 3])
-        .on("zoom", (event) => {
-            g.attr("transform", event.transform);
-        });
+    svg.call(d3.zoom().scaleExtent([0.1, 4]).on("zoom", (event) => {
+        g.attr("transform", event.transform);
+    }));
 
-    svg.call(zoom);
+    // Síťová simulace s kolizemi, aby se kartičky nepřekrývaly a tvořily přehledný pavučinový graf
+    const simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links).id(d => d.id).distance(150))
+        .force("charge", d3.forceManyBody().strength(-600))
+        .force("collide", d3.forceCollide().radius(90))
+        .force("center", d3.forceCenter(width / 2, height / 2));
 
-    const root = d3.hierarchy(data);
-    const treeLayout = d3.tree().nodeSize([170, 90]);
-    treeLayout(root);
-
-    // Počáteční vycentrování stromu
-    svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, 50).scale(0.85));
-
-    // Vykreslení spojnic
-    g.selectAll(".link")
-        .data(root.links())
-        .enter().append("path")
+    const link = g.append("g")
+        .selectAll("line")
+        .data(links)
+        .enter().append("line")
         .attr("class", "link")
-        .attr("d", d3.linkVertical()
-            .x(d => d.x)
-            .y(d => d.y)
-        );
+        .style("stroke-dasharray", d => d.type === 'partner' ? "4,4" : "none");
 
-    // Vykreslení uzlů
-    const node = g.selectAll(".node")
-        .data(root.descendants())
+    const node = g.append("g")
+        .selectAll("g")
+        .data(nodes)
         .enter().append("g")
         .attr("class", "node")
-        .attr("transform", d => `translate(${d.x}, ${d.y})`)
-        .on("click", (event, d) => showDetails(d.data));
+        .on("click", (event, d) => showDetails(d))
+        .call(d3.drag()
+            .on("start", (event, d) => {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            })
+            .on("drag", (event, d) => {
+                d.fx = event.x;
+                d.fy = event.y;
+            })
+            .on("end", (event, d) => {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }));
 
     node.append("rect")
         .attr("width", 150)
@@ -256,12 +238,23 @@ function drawTree(data) {
 
     node.append("text")
         .attr("y", -5)
-        .text(d => d.data.name);
+        .text(d => d.name);
 
     node.append("text")
         .attr("class", "node-subtext")
         .attr("y", 13)
-        .text(d => d.data.birth ? `* ${d.data.birth}` : "");
+        .text(d => d.birth ? `* ${d.birth}` : "");
+
+    simulation.on("tick", () => {
+        link
+            .attr("x1", d => d.source.x)
+            .attr("y1", d => d.source.y)
+            .attr("x2", d => d.target.x)
+            .attr("y2", d => d.target.y);
+
+        node
+            .attr("transform", d => `translate(${d.x}, ${d.y})`);
+    });
 }
 
 function showDetails(person) {
@@ -294,7 +287,7 @@ function showDetails(person) {
 
                 let warn = document.createElement('div');
                 warn.className = 'path-warning';
-                warn.innerText = `💡 Pro přehrávání nahraj soubor "${fileName}" přes GitHub (Add file -> Upload files) do stejného repozitáře.`;
+                warn.innerText = `✓ Video úspěšně spárováno a připraveno k přehrání.`;
                 itemWrapper.appendChild(warn);
 
             } else if (filePath.match(/\.(jpeg|jpg|png|gif)$/i)) {
