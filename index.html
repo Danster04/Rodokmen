@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Můj rodokmen – Jemně růžová a stíny</title>
+    <title>Můj rodokmen – České měsíce a výrazný stín</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -14,9 +14,9 @@
         #sidebar { width: 400px; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; }
         #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
         
-        /* Styly pro kartičky a měkce rozmazaný stín vpravo dolů */
-        .node rect { stroke-width: 1.5px; rx: 6px; ry: 6px; cursor: pointer; transition: all 0.2s; filter: drop-shadow(4px 6px 6px rgba(0, 0, 0, 0.2)); }
-        .node rect:hover { filter: drop-shadow(5px 8px 10px rgba(0, 0, 0, 0.25)); stroke-width: 2px; }
+        /* Styly pro kartički a znatelně ztmavený stín */
+        .node rect { stroke-width: 1.5px; rx: 6px; ry: 6px; cursor: pointer; transition: all 0.2s; filter: drop-shadow(4px 6px 8px rgba(0, 0, 0, 0.35)); }
+        .node rect:hover { filter: drop-shadow(5px 8px 12px rgba(0, 0, 0, 0.45)); stroke-width: 2px; }
         
         /* Muži: světle modrá */
         .node-male rect { fill: #ebf5fb; stroke: #3498db; }
@@ -43,7 +43,7 @@
 <body>
 
     <header>
-        <h1>Můj rodokmen – Růžová a stíny</h1>
+        <h1>Můj rodokmen</h1>
         <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
     </header>
 
@@ -81,6 +81,23 @@
     </div>
 
 <script>
+// Pomocná funkce pro převod anglických měsíců z GEDCOMu na české
+function formatGedcomDate(dateStr) {
+    if (!dateStr) return "";
+    const months = {
+        "JAN": "leden", "FEB": "únor", "MAR": "březen", 
+        "APR": "duben", "MAY": "květen", "JUN": "červen", 
+        "JUL": "červenec", "AUG": "srpen", "SEP": "září", 
+        "OCT": "říjen", "NOV": "listopad", "DEC": "prosinec"
+    };
+    let formatted = dateStr;
+    Object.keys(months).forEach(en => {
+        const regex = new RegExp(en, "gi");
+        formatted = formatted.replace(regex, months[en]);
+    });
+    return formatted;
+}
+
 fetch('dnes.ged')
     .then(response => {
         if (!response.ok) throw new Error("Nepodařilo se načíst dnes.ged");
@@ -155,8 +172,8 @@ function processGedcomData(text) {
             }
         } else if (level === 2) {
             if (currentType === 'INDI') {
-                if (currentEvent === 'BIRT' && key === 'DATE') individuals[currentId].birthDate = val.trim();
-                if (currentEvent === 'DEAT' && key === 'DATE') individuals[currentId].deathDate = val.trim();
+                if (currentEvent === 'BIRT' && key === 'DATE') individuals[currentId].birthDate = formatGedcomDate(val.trim());
+                if (currentEvent === 'DEAT' && key === 'DATE') individuals[currentId].deathDate = formatGedcomDate(val.trim());
             }
         }
     });
