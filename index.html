@@ -97,6 +97,10 @@
                     <div class="detail-label" id="label-marriage">Manželství</div>
                     <div class="detail-value" id="det-marriage">Neuvedeno</div>
                 </div>
+                <div class="detail-item" id="item-siblings" style="display:none;">
+                    <div class="detail-label">Sourozenci</div>
+                    <div class="detail-value" id="det-siblings">-</div>
+                </div>
                 <div class="detail-item">
                     <div class="detail-label">Úmrtí</div>
                     <div class="detail-value" id="det-death">-</div>
@@ -175,7 +179,7 @@ function processGedcomData(text) {
                     individuals[currentId] = { 
                         id: currentId, firstName: '', marriedName: '', birthName: '', sex: 'U',
                         birthDate: '', birthPlace: '', deathDate: '', deathPlace: '',
-                        occupation: '', marriageDate: '', marriagePlace: '', hasSingleFamily: false, parents: [], children: [], spouses: [], media: [] 
+                        occupation: '', marriageDate: '', marriagePlace: '', hasSingleFamily: false, parents: [], children: [], spouses: [], siblings: [], media: [] 
                     };
                     currentFamilyId = null;
                     currentType = 'INDI';
@@ -298,7 +302,6 @@ function processGedcomData(text) {
         let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
         let kids = fam.children.filter(c => c && individuals[c]);
 
-        // Detekce rodiny, kde je pouze jeden rodič (např. svobodná matka)
         if ((husb && !wife) || (!husb && wife)) {
             let singleParentId = husb || wife;
             if (kids.length > 0) {
@@ -347,6 +350,12 @@ function processGedcomData(text) {
                 if (!individuals[childId].parents.includes(parentId)) individuals[childId].parents.push(parentId);
                 if (!individuals[parentId].children.includes(childId)) individuals[parentId].children.push(childId);
             });
+            // Naplnění sourozenců pro sidebar
+            kids.forEach(siblingId => {
+                if (siblingId !== childId && !individuals[childId].siblings.includes(siblingId)) {
+                    individuals[childId].siblings.push(siblingId);
+                }
+            });
         });
     });
 
@@ -391,9 +400,17 @@ function processGedcomData(text) {
         if (p.marriedName !== 'Neznámý' && !(p.id in levels)) levels[p.id] = 0;
     });
 
+    // Filtrování pouze na přímou linii (páteř stromu) – osoba musí mít dítě nebo rodiče v přímé linii, nebo být kořenem
+    let spinePersons = Object.values(individuals).filter(p => {
+        if (p.marriedName === 'Neznámý') return false;
+        let hasChildInTree = p.children.some(cId => individuals[cId] && individuals[cId].marriedName !== 'Neznámý');
+        let hasParentInTree = p.parents.some(pId => individuals[pId] && individuals[pId].marriedName !== 'Neznámý');
+        let isRoot = p.parents.length === 0 && p.children.length > 0;
+        return isRoot || hasChildInTree || hasParentInTree;
+    });
+
     let genGroups = {};
-    Object.values(individuals).forEach(p => {
-        if (p.marriedName === 'Neznámý') return;
+    spinePersons.forEach(p => {
         let lvl = levels[p.id] || 0;
         if (!genGroups[lvl]) genGroups[lvl] = [];
         genGroups[lvl].push(p);
@@ -436,6 +453,7 @@ function processGedcomData(text) {
             let y = parseInt(lvl) * rowHeight + 60;
             
             let resolvedMedia = p.media.map(mId => mediaFiles[mId] ? mediaFiles[mId].file : mId);
+            let resolvedSiblings = p.siblings.map(sId => individuals[sId]).filter(s => s);
 
             let nodeObj = {
                 id: p.id,
@@ -449,6 +467,7 @@ function processGedcomData(text) {
                 occupation: p.occupation,
                 marriages: p.marriages || {},
                 spouses: p.spouses,
+                siblings: resolvedSiblings,
                 hasSingleFamily: p.hasSingleFamily,
                 media: resolvedMedia,
                 x: x,
@@ -598,6 +617,16 @@ function showDetails(person) {
         marItem.style.display = 'block';
     } else {
         marItem.style.display = 'none';
+    }
+
+    // Zobrazení sourozenců v sidebaru
+    const sibItem = document.getElementById('item-siblings');
+    const sibVal = document.getElementById('det-siblings');
+    if (person.siblings && person.siblings.length > 0) {
+        sibVal.innerHTML = person.siblings.map(s => `${s.displayName} (* ${s.birth || 'neznámo'})`).join('<br>');
+        sibItem.style.display = 'block';
+    } else {
+        sibItem.style.display = 'none';
     }
 
     const mediaContainer = document.getElementById('media-container');
