@@ -2,56 +2,68 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Můj rodokmen – Detailní prohlížeč</title>
+    <title>Můj rodokmen – Hierarchický strom</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; }
         h1 { margin: 0; font-size: 1.4rem; }
         #main-container { display: flex; flex-grow: 1; height: calc(100vh - 60px); position: relative; }
-        #canvas { flex-grow: 1; background: #ffffff; position: relative; }
-        #sidebar { width: 350px; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; }
+        #canvas { flex-grow: 1; background: #ffffff; position: relative; overflow: hidden; cursor: grab; }
+        #canvas:active { cursor: grabbing; }
+        #sidebar { width: 380px; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; }
         #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
-        .node rect { fill: #ffffff; stroke: #3498db; stroke-width: 2px; rx: 6px; ry: 6px; cursor: pointer; transition: fill 0.2s; }
-        .node rect:hover { fill: #ebf5fb; stroke: #2980b9; }
-        .node text { font: 12px sans-serif; fill: #2c3e50; pointer-events: none; text-anchor: middle; }
-        .link { stroke: #95a5a6; stroke-width: 1.5px; stroke-opacity: 0.6; }
-        .detail-item { margin-bottom: 12px; }
-        .detail-label { font-weight: bold; color: #7f8c8d; font-size: 0.9rem; }
+        
+        /* Styly pro uzly stromu */
+        .node { cursor: pointer; }
+        .node rect { fill: #ffffff; stroke: #3498db; stroke-width: 2px; rx: 8px; ry: 8px; transition: all 0.2s; }
+        .node:hover rect { fill: #ebf5fb; stroke: #2980b9; filter: drop-shadow(0px 3px 5px rgba(0,0,0,0.15)); }
+        .node text { font: 12px sans-serif; fill: #2c3e50; text-anchor: middle; font-weight: bold; }
+        .node-subtext { font: 10px sans-serif; fill: #7f8c8d; text-anchor: middle; }
+        .link { fill: none; stroke: #bdc3c7; stroke-width: 2px; }
+
+        /* Detail panel */
+        .detail-item { margin-bottom: 15px; }
+        .detail-label { font-weight: bold; color: #7f8c8d; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 3px; }
         .detail-value { font-size: 1.05rem; color: #2c3e50; }
+        .media-preview { max-width: 100%; border-radius: 6px; border: 1px solid #ddd; margin-top: 5px; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Můj rodokmen</h1>
+        <h1>Můj rodokmen – Generační strom</h1>
         <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
     </header>
 
     <div id="main-container">
         <div id="canvas">
-            <div id="loading">Načítám data z GEDCOM souboru...</div>
+            <div id="loading">Načítám a strukturuji rodokmen...</div>
             <svg id="tree-svg" width="100%" height="100%"></svg>
         </div>
         <div id="sidebar">
             <h3>Detail osoby</h3>
-            <p id="no-selection" style="color: #7f8c8d;">Kliknutím na osobu v grafu zafixuješ a zobrazíš její podrobnosti.</p>
+            <p id="no-selection" style="color: #7f8c8d;">Kliknutím na kartu osoby v diagramu zobrazíš její podrobnosti, data a multimédia.</p>
             <div id="person-details" style="display:none;">
                 <div class="detail-item">
-                    <div class="detail-label">Jméno:</div>
+                    <div class="detail-label">Jméno</div>
                     <div class="detail-value" id="det-name">-</div>
                 </div>
                 <div class="detail-item">
-                    <div class="detail-label">Narození:</div>
+                    <div class="detail-label">Narození</div>
                     <div class="detail-value" id="det-birth">-</div>
                 </div>
                 <div class="detail-item">
-                    <div class="detail-label">Úmrtí:</div>
+                    <div class="detail-label">Úmrtí</div>
                     <div class="detail-value" id="det-death">-</div>
                 </div>
+                <div class="detail-item" id="media-container" style="display:none;">
+                    <div class="detail-label">Multimédia / Fotografie</div>
+                    <div id="det-media"></div>
+                </div>
                 <div class="detail-item">
-                    <div class="detail-label">ID v databázi:</div>
-                    <div class="detail-value" id="det-id" style="font-family: monospace; font-size: 0.9rem;">-</div>
+                    <div class="detail-label">ID v databázi</div>
+                    <div class="detail-value" id="det-id" style="font-family: monospace; font-size: 0.85rem; color: #95a5a6;">-</div>
                 </div>
             </div>
         </div>
@@ -75,6 +87,7 @@ function processGedcomData(text) {
     const lines = text.split(/\r?\n/);
     let individuals = {};
     let families = {};
+    let mediaFiles = {};
     let currentId = null;
     let currentType = null;
     let currentEvent = null;
@@ -94,10 +107,10 @@ function processGedcomData(text) {
                 if (val === 'INDI') {
                     currentId = key;
                     individuals[currentId] = { 
-                        id: currentId, 
-                        name: 'Neznámý', 
+                        id: currentId, name: 'Neznámý', 
                         birthDate: '', birthPlace: '', 
-                        deathDate: '', deathPlace: '' 
+                        deathDate: '', deathPlace: '', 
+                        children: [], parents: [], media: [] 
                     };
                     currentFamilyId = null;
                     currentType = 'INDI';
@@ -106,6 +119,10 @@ function processGedcomData(text) {
                     families[currentFamilyId] = { id: currentFamilyId, husb: null, wife: null, children: [] };
                     currentId = null;
                     currentType = 'FAM';
+                } else if (val === 'OBJE') {
+                    currentId = key;
+                    mediaFiles[currentId] = { id: currentId, file: '' };
+                    currentType = 'OBJE';
                 } else {
                     currentId = null;
                     currentFamilyId = null;
@@ -115,54 +132,85 @@ function processGedcomData(text) {
         } else if (level === 1) {
             currentEvent = null;
             if (currentType === 'INDI') {
-                if (key === 'NAME') {
-                    individuals[currentId].name = val.replace(/\//g, '').trim();
-                } else if (key === 'BIRT' || key === 'DEAT') {
-                    currentEvent = key;
-                }
+                if (key === 'NAME') individuals[currentId].name = val.replace(/\//g, '').trim();
+                else if (key === 'BIRT' || key === 'DEAT') currentEvent = key;
+                else if (key === 'FAMC') individuals[currentId].famc = val.trim();
+                else if (key === 'OBJE') individuals[currentId].media.push(val.trim());
             } else if (currentType === 'FAM') {
                 if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
                 if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
                 if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
+            } else if (currentType === 'OBJE') {
+                if (key === 'FILE') mediaFiles[currentId].file = val.replace(/["']/g, '').trim();
             }
-        } else if (level === 2 && currentType === 'INDI') {
-            if (currentEvent === 'BIRT') {
-                if (key === 'DATE') individuals[currentId].birthDate = val.trim();
-                if (key === 'PLAC') individuals[currentId].birthPlace = val.trim();
-            } else if (currentEvent === 'DEAT') {
-                if (key === 'DATE') individuals[currentId].deathDate = val.trim();
-                if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
+        } else if (level === 2) {
+            if (currentType === 'INDI') {
+                if (currentEvent === 'BIRT') {
+                    if (key === 'DATE') individuals[currentId].birthDate = val.trim();
+                    if (key === 'PLAC') individuals[currentId].birthPlace = val.trim();
+                } else if (currentEvent === 'DEAT') {
+                    if (key === 'DATE') individuals[currentId].deathDate = val.trim();
+                    if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
+                }
             }
         }
     });
 
-    let nodes = [];
-    let personMap = {};
-
-    Object.values(individuals).forEach(p => {
-        if (p.name !== 'Neznámý') {
-            personMap[p.id] = p;
-            nodes.push(p);
-        }
-    });
-
-    let links = [];
+    // Propojení rodin do hierarchie rodič-dítě
     Object.values(families).forEach(fam => {
-        let parents = [fam.husb, fam.wife].filter(p => p && personMap[p]);
-        let kids = fam.children.filter(c => c && personMap[c]);
+        let parents = [fam.husb, fam.wife].filter(p => p && individuals[p]);
+        let kids = fam.children.filter(c => c && individuals[c]);
 
-        parents.forEach(parent => {
-            kids.forEach(child => {
-                links.push({ source: parent, target: child });
+        kids.forEach(childId => {
+            parents.forEach(parentId => {
+                if (!individuals[childId].parents.includes(parentId)) {
+                    individuals[childId].parents.append ? null : individuals[childId].parents.push(parentId);
+                }
+                if (!individuals[parentId].children.includes(childId)) {
+                    individuals[parentId].children.push(childId);
+                }
             });
         });
     });
 
+    // Najdeme kořen stromu (osoba, která nemá rodiče v databázi, nebo první nalezená)
+    let rootCandidates = Object.values(individuals).filter(p => p.name !== 'Neznámý');
+    if (rootCandidates.length === 0) return;
+
+    // Sestavení hierarchického objektu pro D3 tree
+    let rootPerson = rootCandidates.find(p => p.parents.length === 0) || rootCandidates[0];
+
+    function buildHierarchy(personId, visited = new Set()) {
+        if (visited.has(personId)) return null; // Ochrana proti cyklům
+        visited.add(personId);
+
+        let person = individuals[personId];
+        if (!person) return null;
+
+        let nodeData = {
+            id: person.id,
+            name: person.name,
+            birth: person.birthDate,
+            death: person.deathDate,
+            media: person.media.map(mId => mediaFiles[mId] ? mediaFiles[mId].file : mId),
+            children: []
+        };
+
+        person.children.forEach(childId => {
+            let childNode = buildHierarchy(childId, new Set(visited));
+            if (childNode) nodeData.children.push(childNode);
+        });
+
+        return nodeData;
+    }
+
+    let treeData = buildHierarchy(rootPerson.id);
+
     document.getElementById('loading').style.display = 'none';
-    drawNetwork(nodes, links);
+    drawTree(treeData);
 }
 
-function drawNetwork(nodes, links) {
+function drawTree(data) {
     const svg = d3.select("#tree-svg");
     const container = document.getElementById('canvas');
     const width = container.clientWidth;
@@ -172,65 +220,63 @@ function drawNetwork(nodes, links) {
 
     const g = svg.append("g");
 
-    svg.call(d3.zoom().on("zoom", (event) => {
-        g.attr("transform", event.transform);
-    }));
+    // Zoom a panování plátna
+    const zoom = d3.zoom()
+        .scaleExtent([0.2, 3])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
 
-    const simulation = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(links).id(d => d.id).distance(130))
-        .force("charge", d3.forceManyBody().strength(-300))
-        .force("center", d3.forceCenter(width / 2, height / 2));
+    svg.call(zoom);
 
-    const link = g.append("g")
-        .selectAll("line")
-        .data(links)
-        .enter().append("line")
-        .attr("class", "link");
+    // Vytvoření hierarchického layoutu (strom shora dolů)
+    const root = d3.hierarchy(data);
+    const treeLayout = d3.tree().nodeSize([180, 100]);
+    treeLayout(root);
 
-    const node = g.append("g")
-        .selectAll("g")
-        .data(nodes)
+    // Vycentrování stromu na plátno
+    let xMin = Infinity, xMax = -Infinity;
+    root.each(d => {
+        if (d.x < xMin) xMin = d.x;
+        if (d.x > xMax) xMax = d.x;
+    });
+    
+    svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, 60).scale(0.8));
+
+    // Vykreslení větví (spoilerů)
+    g.selectAll(".link")
+        .data(root.links())
+        .enter().append("path")
+        .attr("class", "link")
+        .attr("d", d3.linkVertical()
+            .x(d => d.x)
+            .y(d => d.y)
+        );
+
+    // Vykreslení uzlů (karet osob)
+    const node = g.selectAll(".node")
+        .data(root.descendants())
         .enter().append("g")
         .attr("class", "node")
-        .on("click", (event, d) => {
-            showDetails(d);
-        })
-        .call(d3.drag()
-            .on("start", (event, d) => {
-                if (!event.active) simulation.alphaTarget(0.3).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-            })
-            .on("drag", (event, d) => {
-                d.fx = event.x;
-                d.fy = event.y;
-            })
-            .on("end", (event, d) => {
-                if (!event.active) simulation.alphaTarget(0);
-                d.fx = null;
-                d.fy = null;
-            }));
+        .attr("transform", d => `translate(${d.x}, ${d.y})`)
+        .on("click", (event, d) => showDetails(d.data));
 
     node.append("rect")
         .attr("width", 150)
-        .attr("height", 40)
+        .attr("height", 50)
         .attr("x", -75)
-        .attr("y", -20);
+        .attr("y", -25);
 
+    // Jméno osoby
     node.append("text")
-        .attr("y", 4)
-        .text(d => d.name);
+        .attr("y", -5)
+        .text(d => d.data.name);
 
-    simulation.on("tick", () => {
-        link
-            .attr("x1", d => d.source.x)
-            .attr("y1", d => d.source.y)
-            .attr("x2", d => d.target.x)
-            .attr("y2", d => d.target.y);
-
-        node
-            .attr("transform", d => `translate(${d.x}, ${d.y})`);
-    });
+    // Podtext s datem narození
+    node.append("text")
+        .attr("class", "node-subtext")
+        .attr("y", 15)
+        .text(d => d.data.birth ? `* ${d.data.birth}` : "");
 }
 
 function showDetails(person) {
@@ -238,16 +284,34 @@ function showDetails(person) {
     document.getElementById('person-details').style.display = 'block';
 
     document.getElementById('det-name').innerText = person.name || "Neuvedeno";
-    
-    let birth = person.birthDate || "";
-    if (person.birthPlace) birth += " (" + person.birthPlace + ")";
-    document.getElementById('det-birth').innerText = birth || "Neuvedeno";
-
-    let death = person.deathDate || "";
-    if (person.deathPlace) death += " (" + person.deathPlace + ")";
-    document.getElementById('det-death').innerText = death || "Neuvedeno";
-
+    document.getElementById('det-birth').innerText = person.birth || "Neuvedeno";
+    document.getElementById('det-death').innerText = person.death || "Neuvedeno";
     document.getElementById('det-id').innerText = person.id;
+
+    // Multimédia / fotky
+    const mediaContainer = document.getElementById('media-container');
+    const mediaDiv = document.getElementById('det-media');
+    mediaDiv.innerHTML = '';
+
+    if (person.media && person.media.length > 0) {
+        mediaContainer.style.display = 'block';
+        person.media.forEach(file => {
+            if (file.match(/\.(jpeg|jpg|png|gif)$/i)) {
+                const img = document.createElement('img');
+                img.src = file;
+                img.className = 'media-preview';
+                mediaDiv.appendChild(img);
+            } else {
+                const link = document.createElement('a');
+                link.href = file;
+                link.innerText = file;
+                link.target = "_blank";
+                mediaDiv.appendChild(link);
+            }
+        });
+    } else {
+        mediaContainer.style.display = 'none';
+    }
 }
 </script>
 
