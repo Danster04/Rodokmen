@@ -1,59 +1,352 @@
-// Příklad úpravy funkce, která zpracovává osobu pro detail a pravou lištu
-function renderSidebarDetails(person, allPeople) {
-    // 1. Základní údaje v pravé liště
-    document.getElementById('det-jmeno').innerText = person.name;
-    // ... tvoje ostatní vykreslování (daty, narození atd.) ...
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Můj rodokmen</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; flex-shrink: 0; }
+        h1 { margin: 0; font-size: 1.4rem; }
+        
+        #main-container { display: flex; flex-direction: row; flex-grow: 1; height: calc(100vh - 60px); position: relative; overflow: hidden; }
+        #canvas { flex-grow: 1; background: #fcfcfc; position: relative; overflow: hidden; cursor: grab; }
+        #canvas:active { cursor: grabbing; }
+        
+        #sidebar { width: 400px; flex-shrink: 0; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; box-sizing: border-box; }
+        #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
 
-    // 2. Vyhledání sourozenců, kteří NEJSOU v přímé linii stromu
-    const sidebarSiblingsContainer = document.getElementById('det-sourozenci');
-    if (sidebarSiblingsContainer) {
-        sidebarSiblingsContainer.innerHTML = '';
+        .node rect { stroke-width: 1.5px; rx: 6px; ry: 6px; cursor: pointer; transition: all 0.2s; filter: drop-shadow(4px 6px 8px rgba(0, 0, 0, 0.35)); }
+        .node rect:hover { filter: drop-shadow(5px 8px 12px rgba(0, 0, 0, 0.45)); stroke-width: 2px; }
 
-        // Získání sourozenců (např. přes společné rodiče)
-        let siblings = getSiblings(person, allPeople);
+        .node-male rect { fill: #ebf5fb; stroke: #3498db; }
+        .node-male rect:hover { fill: #d4e6f1; stroke: #2980b9; }
+        .node-male .node-name { fill: #154360; font-weight: bold; font-size: 13px; }
 
-        if (siblings.length > 0) {
-            let heading = document.createElement('h4');
-            heading.innerText = "Sourozenci (vedlejší linie):";
-            sidebarSiblingsContainer.appendChild(heading);
+        .node-female rect { fill: #fce4ec; stroke: #e91e63; }
+        .node-female rect:hover { fill: #f8bbd0; stroke: #c2185b; }
+        .node-female .node-name { fill: #512e5f; font-weight: bold; font-size: 13px; }
 
-            let ul = document.createElement('ul');
-            siblings.forEach(sib => {
-                let li = document.createElement('li');
-                let link = document.createElement('a');
-                link.href = "#";
-                link.innerText = sib.name;
-                // Kliknutím na sourozence v pravé liště se přepne detail na něj
-                link.onclick = (e) => {
-                    e.preventDefault();
-                    renderSidebarDetails(sib, allPeople);
-                };
-                li.appendChild(link);
-                ul.appendChild(li);
-            });
-            sidebarSiblingsContainer.appendChild(ul);
-            sidebarSiblingsContainer.style.display = 'block';
-        } else {
-            sidebarSiblingsContainer.style.display = 'none';
+        .node text { font: 12px sans-serif; pointer-events: none; text-anchor: middle; }
+        .node-name { font-size: 13px; font-weight: bold; }
+        .node-subtext { font: 10px sans-serif; fill: #555; pointer-events: none; text-anchor: middle; font-weight: normal; }
+        .link { stroke: #bdc3c7; stroke-width: 1.5px; fill: none; opacity: 0.8; }
+
+        .detail-item { margin-bottom: 15px; }
+        .detail-label { font-weight: bold; color: #7f8c8d; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 3px; }
+        .detail-value { font-size: 1.05rem; color: #2c3e50; }
+        .media-preview { max-width: 100%; border-radius: 6px; border: 1px solid #ddd; margin-top: 5px; }
+        video.media-preview { width: 100%; background: #000; }
+        .path-warning { font-size: 0.8rem; color: #27ae60; margin-top: 4px; line-height: 1.3; }
+
+        /* Styly pro seznam sourozenců v postranním panelu */
+        #det-siblings-list { list-style: none; padding: 0; margin: 0; }
+        #det-siblings-list li { margin-bottom: 5px; }
+        #det-siblings-list a { color: #3498db; text-decoration: none; cursor: pointer; }
+        #det-siblings-list a:hover { text-decoration: underline; }
+
+        #close-modal { display: none; float: right; background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+
+        @media screen and (max-width: 1200px) {
+            #sidebar { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; width: auto; height: 100vh; z-index: 1000; box-shadow: none; border-left: none; padding: 25px; }
+            #sidebar.active-modal { display: block; }
+            #close-modal { display: block; }
         }
-    }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Můj rodokmen</h1>
+        <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
+    </header>
+
+    <div id="main-container">
+        <div id="canvas">
+            <div id="loading">Skládám graf...</div>
+            <svg id="tree-svg" width="100%" height="100%"></svg>
+        </div>
+        <div id="sidebar">
+            <button id="close-modal" onclick="closeModal()">✕ Zavřít</button>
+            <h3>Detail osoby</h3>
+            <p id="no-selection" style="color: #7f8c8d;">Kliknutím na osobu v grafu zobrazíš její podrobnosti a multimédia.</p>
+            <div id="person-details" style="display:none;">
+                <div class="detail-item">
+                    <div class="detail-label">Jméno</div>
+                    <div class="detail-value" id="det-name">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Narození</div>
+                    <div class="detail-value" id="det-birth">-</div>
+                </div>
+                <div class="detail-item" id="item-occupation" style="display:none;">
+                    <div class="detail-label">Povolání / Status</div>
+                    <div class="detail-value" id="det-occupation">-</div>
+                </div>
+                <div class="detail-item" id="item-marriage">
+                    <div class="detail-label" id="label-marriage">Manželství</div>
+                    <div class="detail-value" id="det-marriage">Neuvedeno</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Úmrtí</div>
+                    <div class="detail-value" id="det-death">-</div>
+                </div>
+                <!-- Sekce pro sourozence v pravé liště -->
+                <div class="detail-item" id="item-siblings" style="display:none;">
+                    <div class="detail-label">Sourozenci (mimo přímou linii)</div>
+                    <ul id="det-siblings-list"></ul>
+                </div>
+                <div class="detail-item" id="media-container" style="display:none;">
+                    <div class="detail-label">Multimédia / Videa / Fotky</div>
+                    <div id="det-media"></div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">ID v databázi</div>
+                    <div class="detail-value" id="det-id" style="font-family: monospace; font-size: 0.85rem; color: #95a5a6;">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+let globalIndividuals = {}; // Globální uložení pro přístup z detailů
+
+function formatGedcomDate(dateStr) {
+    if (!dateStr) return "";
+    const months = {
+        "JAN": "leden", "FEB": "únor", "MAR": "březen",
+        "APR": "duben", "MAY": "květen", "JUN": "červen", 
+        "JUL": "červenec", "AUG": "srpen", "SEP": "září", 
+        "OCT": "říjen", "NOV": "listopad", "DEC": "prosinec"
+    };
+    let formatted = dateStr;
+    Object.keys(months).forEach(en => {
+        const regex = new RegExp(en, "gi");
+        formatted = formatted.replace(regex, months[en]);
+    });
+    return formatted;
 }
 
-// Pomocná funkce na nalezení sourozenců (pokud ji nemáš hotovou jinde)
-function getSiblings(person, allPeople) {
-    if (!person.parents || person.parents.length === 0) return [];
-    let siblingsSet = new Set();
-    
-    person.parents.forEach(parentId => {
-        let parent = allPeople.find(p => p.id === parentId);
-        if (parent && parent.children) {
-            parent.children.forEach(childId => {
-                if (childId !== person.id) {
-                    let sib = allPeople.find(p => p.id === childId);
-                    if (sib) siblingsSet.add(sib);
+fetch('dnes.ged')
+    .then(response => {
+        if (!response.ok) throw new Error("Nepodařilo se načíst dnes.ged");
+        return response.text();
+    })
+    .then(data => {
+        processGedcomData(data);
+    })
+    .catch(error => {
+        document.getElementById('loading').innerText = "Chyba: " + error.message;
+        document.getElementById('loading').style.color = "red";
+    });
+
+function processGedcomData(text) {
+    const lines = text.split(/\r?\n/);
+    let individuals = {};
+    let families = {};
+    let sharedEvents = {}; 
+    let mediaFiles = {};
+
+    let currentId = null;
+    let currentType = null;
+    let currentEvent = null;
+    let currentFamilyId = null;
+    let currentEventId = null;
+    let currentNameObj = null;
+
+    lines.forEach(line => {
+        const match = line.match(/^([0-9])\s+(@\w+@|[A-Z_]+)\s*(.*)$/);
+        if (!match) return;
+
+        const level = parseInt(match[1]);
+        const key = match[2];
+        const val = match[3];
+
+        if (level === 0) {
+            currentEvent = null;
+            currentNameObj = null;
+            currentEventId = null;
+
+            if (key.startsWith('@') && key.endsWith('@')) {
+                if (val === 'INDI') {
+                    currentId = key;
+                    individuals[currentId] = { 
+                        id: currentId, firstName: '', marriedName: '', birthName: '', sex: 'U',
+                        birthDate: '', birthPlace: '', deathDate: '', deathPlace: '',
+                        occupation: '', marriageDate: '', marriagePlace: '', hasSingleFamily: false, parents: [], children: [], spouses: [], media: [] 
+                    };
+                    currentFamilyId = null;
+                    currentType = 'INDI';
+                } else if (val === 'FAM') {
+                    currentFamilyId = key;
+                    families[currentFamilyId] = { 
+                        id: currentFamilyId, husb: null, wife: null, children: [], 
+                        marriageDate: '', marriagePlace: '', sharedEventRef: null 
+                    };
+                    currentId = null;
+                    currentType = 'FAM';
+                } else if (val === 'EVEN') {
+                    currentEventId = key;
+                    sharedEvents[currentEventId] = { id: currentEventId, type: '', date: '', place: '' };
+                    currentType = 'EVEN';
+                } else if (val === 'OBJE') {
+                    currentId = key;
+                    mediaFiles[currentId] = { id: currentId, file: '' };
+                    currentType = 'OBJE';
+                } else {
+                    currentId = null;
+                    currentFamilyId = null;
+                    currentType = null;
                 }
-            });
+            }
+        } else if (level === 1) {
+            currentEvent = null;
+            if (currentType === 'INDI' && currentId && individuals[currentId]) {
+                if (key === 'NAME') {
+                    currentNameObj = { fullName: val.replace(/\//g, '').trim(), type: '' };
+                    if (!individuals[currentId].allNames) individuals[currentId].allNames = [];
+                    individuals[currentId].allNames.push(currentNameObj);
+                } else if (key === 'SEX') {
+                    individuals[currentId].sex = val.trim();
+                } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU' || key === 'MARR' || key === 'EVEN') {
+                    currentEvent = key;
+                    if (key === 'OCCU') {
+                        individuals[currentId].occupation = val.trim();
+                    }
+                } else if (key === 'OBJE') {
+                    individuals[currentId].media.push(val.trim());
+                }
+            } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
+                if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
+                if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
+                if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
+                if (key === 'MARR') {
+                    currentEvent = 'MARR';
+                } else if (key === 'EVEN') {
+                    families[currentFamilyId].sharedEventRef = val.replace(/@/g, '').trim();
+                }
+            } else if (currentType === 'EVEN' && currentEventId && sharedEvents[currentEventId]) {
+                if (key === 'TYPE') sharedEvents[currentEventId].type = val.trim().toLowerCase();
+            } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
+                if (key === 'FILE') mediaFiles[currentId].file = val.replace(/["']/g, '').trim();
+            }
+        } else if (level === 2) {
+            if (currentType === 'INDI' && currentId && individuals[currentId]) {
+                if (currentNameObj && key === 'TYPE') {
+                    currentNameObj.type = val.trim().toLowerCase();
+                }
+                if (currentEvent === 'BIRT') {
+                    if (key === 'DATE') individuals[currentId].birthDate = formatGedcomDate(val.trim());
+                    if (key === 'PLAC') individuals[currentId].birthPlace = val.trim();
+                }
+                if (currentEvent === 'DEAT') {
+                    if (key === 'DATE') individuals[currentId].deathDate = formatGedcomDate(val.trim());
+                    if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
+                }
+                if (currentEvent === 'MARR') {
+                    if (key === 'DATE') individuals[currentId].marriageDate = formatGedcomDate(val.trim());
+                    if (key === 'PLAC') individuals[currentId].marriagePlace = val.trim();
+                }
+                if (currentEvent === 'EVEN') {
+                    if (key === 'TYPE' && val.trim().toLowerCase() === 'marriage') {
+                        individuals[currentId].isMarriageEvent = true;
+                    }
+                    if (individuals[currentId].isMarriageEvent) {
+                        if (key === 'DATE') individuals[currentId].marriageDate = formatGedcomDate(val.trim());
+                        if (key === 'PLAC') individuals[currentId].marriagePlace = val.trim();
+                    }
+                }
+            } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
+                if (currentEvent === 'MARR') {
+                    if (key === 'DATE') families[currentFamilyId].marriageDate = formatGedcomDate(val.trim());
+                    if (key === 'PLAC') families[currentFamilyId].marriagePlace = val.trim();
+                }
+            } else if (currentType === 'EVEN' && currentEventId && sharedEvents[currentEventId]) {
+                if (key === 'DATE') sharedEvents[currentEventId].date = formatGedcomDate(val.trim());
+                if (key === 'PLAC') sharedEvents[currentEventId].place = val.trim();
+            }
         }
     });
-    return Array.from(siblingsSet);
-}
+
+    Object.values(individuals).forEach(p => {
+        if (p.allNames && p.allNames.length > 0) {
+            let married = p.allNames.find(n => n.type.includes('manžel') || n.type.includes('married'));
+            let birth = p.allNames.find(n => n.type.includes('rodn') || n.type.includes('birth'));
+
+            if (!married && p.allNames.length > 0) married = p.allNames[0];
+            if (!birth && p.allNames.length > 1) birth = p.allNames[1];
+
+            p.marriedName = married ? married.fullName : p.allNames[0].fullName;
+            p.birthName = birth ? birth.fullName : '';
+        } else {
+            p.marriedName = 'Neznámý';
+        }
+
+        p.displayName = p.marriedName;
+        if (p.birthName && p.birthName !== p.marriedName) {
+            p.detailName = `${p.marriedName} (roz. ${p.birthName})`;
+        } else {
+            p.detailName = p.marriedName;
+        }
+    });
+
+    Object.values(families).forEach(fam => {
+        let husb = fam.husb && individuals[fam.husb] ? fam.husb : null;
+        let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
+        let kids = fam.children.filter(c => c && individuals[c]);
+
+        if ((husb && !wife) || (!husb && wife)) {
+            let singleParentId = husb || wife;
+            if (kids.length > 0) {
+                individuals[singleParentId].hasSingleFamily = true;
+            }
+        }
+
+        let mDate = fam.marriageDate;
+        let mPlace = fam.marriagePlace;
+
+        if (!mDate && husb && individuals[husb].marriageDate) {
+            mDate = individuals[husb].marriageDate;
+            mPlace = individuals[husb].marriagePlace;
+        }
+        if (!mDate && wife && individuals[wife].marriageDate) {
+            mDate = individuals[wife].marriageDate;
+            mPlace = individuals[wife].marriagePlace;
+        }
+        if (!mDate && fam.sharedEventRef) {
+            let evKey = '@' + fam.sharedEventRef + '@';
+            if (sharedEvents[evKey] && sharedEvents[evKey].date) {
+                mDate = sharedEvents[evKey].date;
+                mPlace = sharedEvents[evKey].place;
+            }
+        }
+
+        let marriageInfo = { date: mDate, place: mPlace };
+
+        if (husb && wife) {
+            if (!individuals[husb].spouses.includes(wife)) individuals[husb].spouses.push(wife);
+            if (!individuals[wife].spouses.includes(husb)) individuals[wife].spouses.push(husb);
+            
+            if (!individuals[husb].marriages) individuals[husb].marriages = {};
+            if (!individuals[wife].marriages) individuals[wife].marriages = {};
+            individuals[husb].marriages[wife] = marriageInfo;
+            individuals[wife].marriages[husb] = marriageInfo;
+        }
+
+        let parents = [husb, wife].filter(p => p !== null);
+        kids.forEach(childId => {
+            parents.forEach(parentId => {
+                if (!individuals[childId].parents.includes(parentId)) individuals[childId].parents.push(parentId);
+                if (!individuals[parentId].children.includes(childId)) individuals[parentId].children.push(childId);
+            });
+        });
+    });
+
+    // --- IDENTIFIKACE PŘÍMÉ LINIE PRO HLAVNÍ STROM ---
+    let linePersons = new Set();
+    let roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý' && p.parents.length === 0);
+    if (roots.length === 0) roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý');
+
+    // Vybereme hlavní kořen (případně prvního z kořenů) a od něj bereme jen přímou linii dolů (první dítě v řadě)
+    function
