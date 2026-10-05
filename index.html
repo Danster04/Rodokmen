@@ -1,51 +1,230 @@
-/**
- * Zobrazení detailu konkrétní osoby v bočním panelu
- */
-function showPersonDetails(person) {
-    AppState.selectedPersonId = person.id;
-    
-    const detailPanel = document.getElementById('detail-panel');
-    if (!detailPanel) return;
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Můj rodokmen</title>
+    <style>
+        body {
+            background-color: #111;
+            text-align: center;
+            font-family: sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .main-container {
+            flex-grow: 1;
+            position: relative;
+            overflow: auto;
+        }
+        .tree-image {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        /* Styl bočního panelu */
+        #detail-panel {
+            width: 320px;
+            background-color: #222;
+            color: #fff;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: left;
+            overflow-y: auto;
+            border-left: 1px solid #444;
+            flex-shrink: 0;
+        }
+        .detail-row {
+            margin-bottom: 15px;
+        }
+        .label {
+            font-size: 11px;
+            color: #888;
+            letter-spacing: 1px;
+            display: block;
+            margin-bottom: 3px;
+        }
+        .value {
+            font-size: 14px;
+            color: #fff;
+        }
+        .detail-section {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .person-list {
+            list-style: none;
+            padding: 0;
+            margin: 5px 0 0 0;
+        }
+        .person-list li {
+            margin-bottom: 5px;
+        }
+        .person-list a {
+            color: #4da6ff;
+            text-decoration: none;
+        }
+        .person-list a:hover {
+            text-decoration: underline;
+        }
+        /* Styl modálního okna pro přehrávání videa */
+        #videoModal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+        }
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85%;
+            max-width: 1000px;
+            max-height: 90vh; 
+            box-sizing: border-box;
+        }
+        video {
+            width: 100%;
+            max-height: 80vh; 
+            height: auto;
+            display: block;
+            margin: 0 auto;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+        }
+        .close-btn {
+            position: absolute;
+            top: -35px;
+            right: 0;
+            color: #fff;
+            font-size: 35px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 1010;
+        }
+    </style>
+</head>
+<body>
 
-    // Základní informace o osobě
-    let html = `
+    <div class="main-container">
+        <!-- Obrázek rodokmenu přes celou šířku -->
+        <img src="screen.jpg" usemap="#image-map" class="tree-image">
+
+        <map name="image-map">
+            <area alt="" title="" href="javascript:void(0);" coords="306,407,441,342" shape="rect" onclick="openVideo('Video_Luzany_titulek.mp4');">
+        </map>
+    </div>
+
+    <!-- Boční panel pro detail osoby -->
+    <div id="detail-panel">
         <h3>Detail osoby</h3>
-        <div class="detail-row">
-            <span class="label">JMÉNO</span>
-            <span class="value">${person.name}</span>
-        </div>
-        <div class="detail-row">
-            <span class="label">NAROZENÍ</span>
-            <span class="value">${person.birth || 'Neuvedeno'}</span>
-        </div>
-        <div class="detail-row">
-            <span class="label">STAV / VZTAH</span>
-            <span class="value">${person.status || 'Neuvedeno'}</span>
-        </div>
-    `;
+        <p style="color: #777;">Klikněte na osobu v rodokmenu...</p>
+    </div>
 
-    // Sekce dětí – zde je natvrdo vynucen pouze nápis "DĚTI", ignorují se sourozenci i matka
-    if (person.children && person.children.length > 0) {
-        html += `<div class="detail-section">`;
-        html += `<span class="label">DĚTI</span>`;
-        html += `<ul class="person-list">`;
-        person.children.forEach(child => {
-            html += `<li><a href="#" onclick="focusPerson('${child.id}')">${child.name}</a></li>`;
-        });
-        html += `</ul></div>`;
-    }
-
-    // Úmrtí a ID v databázi
-    html += `
-        <div class="detail-row">
-            <span class="label">ÚMRTÍ</span>
-            <span class="value">${person.death || 'Neuvedeno'}</span>
+    <!-- Modální okno s přehrávačem -->
+    <div id="videoModal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeVideo()">&times;</span>
+            <video id="popupVideo" controls>
+                <source id="videoSource" src="" type="video/mp4">
+                Váš prohlížeč nepodporuje přehrávání videa.
+            </video>
         </div>
-        <div class="detail-row">
-            <span class="label">ID V DATABÁZI</span>
-            <span class="value">${person.dbId || ''}</span>
-        </div>
-    `;
+    </div>
 
-    detailPanel.innerHTML = html;
-}
+    <!-- Knihovna pro automatické škálování souřadnic image-mapy -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/image-map-resizer/1.0.10/js/imageMapResizer.min.js"></script>
+    
+    <script>
+        const AppState = {
+            selectedPersonId: null
+        };
+
+        // Spuštění automatického škálování mapy
+        imageMapResize();
+
+        /**
+         * Zobrazení detailu konkrétní osoby v bočním panelu
+         */
+        function showPersonDetails(person) {
+            AppState.selectedPersonId = person.id;
+            
+            const detailPanel = document.getElementById('detail-panel');
+            if (!detailPanel) return;
+
+            let html = `
+                <h3>Detail osoby</h3>
+                <div class="detail-row">
+                    <span class="label">JMÉNO</span>
+                    <span class="value">${person.name}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">NAROZENÍ</span>
+                    <span class="value">${person.birth || 'Neuvedeno'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">STAV / VZTAH</span>
+                    <span class="value">${person.status || 'Neuvedeno'}</span>
+                </div>
+            `;
+
+            // Sekce dětí – natvrdo pouze nápis "DĚTI"
+            if (person.children && person.children.length > 0) {
+                html += `<div class="detail-section">`;
+                html += `<span class="label">DĚTI</span>`;
+                html += `<ul class="person-list">`;
+                person.children.forEach(child => {
+                    html += `<li><a href="#" onclick="focusPerson('${child.id}')">${child.name}</a></li>`;
+                });
+                html += `</ul></div>`;
+            }
+
+            html += `
+                <div class="detail-row">
+                    <span class="label">ÚMRTÍ</span>
+                    <span class="value">${person.death || 'Neuvedeno'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="label">ID V DATABÁZI</span>
+                    <span class="value">${person.dbId || ''}</span>
+                </div>
+            `;
+
+            detailPanel.innerHTML = html;
+        }
+
+        function focusPerson(id) {
+            // Sem případně doplnit logiku pro fokus na osobu
+            console.log("Fokus na osobu:", id);
+        }
+
+        function openVideo(videoFile) {
+            var modal = document.getElementById('videoModal');
+            var video = document.getElementById('popupVideo');
+            var source = document.getElementById('videoSource');
+            
+            source.src = videoFile;
+            video.load();
+            modal.style.display = 'block';
+            video.play();
+        }
+
+        function closeVideo() {
+            var modal = document.getElementById('videoModal');
+            var video = document.getElementById('popupVideo');
+            
+            video.pause();
+            video.currentTime = 0;
+            modal.style.display = 'none';
+        }
+    </script>
+
+</body>
+</html>
