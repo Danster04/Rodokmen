@@ -114,4 +114,197 @@
     </div>
 
 <script>
-function formatGedcomDate(
+function formatGedcomDate(dateStr) {
+    if (!dateStr) return "";
+    const months = {
+        "JAN": "leden", "FEB": "únor", "MAR": "březen", 
+        "APR": "duben", "MAY": "květen", "JUN": "červen", 
+        "JUL": "červenec", "AUG": "srpen", "SEP": "září", 
+        "OCT": "říjen", "NOV": "listopad", "DEC": "prosinec"
+    };
+    let formatted = dateStr;
+    Object.keys(months).forEach(en => {
+        const regex = new RegExp(en, "gi");
+        formatted = formatted.replace(regex, months[en]);
+    });
+    return formatted;
+}
+
+fetch('dnes.ged')
+    .then(response => {
+        if (!response.ok) throw new Error("Nepodařilo se načíst dnes.ged");
+        return response.text();
+    })
+    .then(data => {
+        processGedcomData(data);
+    })
+    .catch(error => {
+        document.getElementById('loading').innerText = "Chyba: " + error.message;
+        document.getElementById('loading').style.color = "red";
+    });
+
+function processGedcomData(text) {
+    const lines = text.split(/\r?\n/);
+    let individuals = {};
+    let families = {};
+    let mediaFiles = {};
+    let currentId = null;
+    let currentType = null;
+    let currentEvent = null;
+    let currentFamilyId = null;
+    let currentNameObj = null;
+
+    lines.forEach(line => {
+        const match = line.match(/^([0-9])\s+(@\w+@|[A-Z_]+)\s*(.*)$/);
+        if (!match) return;
+
+        const level = parseInt(match[1]);
+        const key = match[2];
+        const val = match[3];
+
+        if (level === 0) {
+            currentEvent = null;
+            currentNameObj = null;
+            if (key.startsWith('@') && key.endsWith('@')) {
+                if (val === 'INDI') {
+                    currentId = key;
+                    individuals[currentId] = { 
+                        id: currentId, firstName: '', marriedName: '', birthName: '', sex: 'U',
+                        birthDate: '', birthPlace: '', deathDate: '', deathPlace: '',
+                        occupation: '', parents: [], children: [], spouses: [], media: [] 
+                    };
+                    currentFamilyId = null;
+                    currentType = 'INDI';
+                } else if (val === 'FAM') {
+                    currentFamilyId = key;
+                    families[currentFamilyId] = { 
+                        id: currentFamilyId, husb: null, wife: null, children: [], 
+                        marriageDate: '', marriagePlace: '' 
+                    };
+                    currentId = null;
+                    currentType = 'FAM';
+                } else if (val === 'OBJE') {
+                    currentId = key;
+                    mediaFiles[currentId] = { id: currentId, file: '' };
+                    currentType = 'OBJE';
+                } else {
+                    currentId = null;
+                    currentFamilyId = null;
+                    currentType = null;
+                }
+            }
+        } else if (level === 1) {
+            currentEvent = null;
+            if (currentType === 'INDI') {
+                if (key === 'NAME') {
+                    currentNameObj = { fullName: val.replace(/\//g, '').trim(), type: '' };
+                    if (!individuals[currentId].allNames) individuals[currentId].allNames = [];
+                    individuals[currentId].allNames.push(currentNameObj);
+                } else if (key === 'SEX') {
+                    individuals[currentId].sex = val.trim();
+                } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU') {
+                    currentEvent = key;
+                    if (key === 'OCCU') {
+                        individuals[currentId].occupation = val.trim();
+                    }
+                } else if (key === 'OBJE') {
+                    individuals[currentId].media.push(val.trim());
+                }
+            } else if (currentType === 'FAM') {
+                if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
+                if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
+                if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
+                if (key === 'MARR' || key === 'EVEN') {
+                    currentEvent = 'MARR';
+                }
+            } else if (currentType === 'OBJE') {
+                if (key === 'FILE') mediaFiles[currentId].file = val.replace(/["']/g, '').trim();
+            }
+        } else if (level === 2) {
+            if (currentType === 'INDI') {
+                if (currentNameObj && key === 'TYPE') {
+                    currentNameObj.type = val.trim().toLowerCase();
+                }
+                if (currentEvent === 'BIRT') {
+                    if (key === 'DATE') individuals[currentId].birthDate = formatGedcomDate(val.trim());
+                    if (key === 'PLAC') individuals[currentId].birthPlace = val.trim();
+                }
+                if (currentEvent === 'DEAT') {
+                    if (key === 'DATE') individuals[currentId].deathDate = formatGedcomDate(val.trim());
+                    if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
+                }
+            } else if (currentType === 'FAM') {
+                if (currentEvent === 'MARR') {
+                    if (key === 'DATE') families[currentFamilyId].marriageDate = formatGedcomDate(val.trim());
+                    if (key === 'PLAC') families[currentFamilyId].marriagePlace = val.trim();
+                }
+            }
+        }
+    });
+
+    Object.values(individuals).forEach(p => {
+        if (p.allNames && p.allNames.length > 0) {
+            let married = p.allNames.find(n => n.type.includes('manžel') || n.type.includes('married'));
+            let birth = p.allNames.find(n => n.type.includes('rodn') || n.type.includes('birth'));
+
+            if (!married && p.allNames.length > 0) married = p.allNames[0];
+            if (!birth && p.allNames.length > 1) birth = p.allNames[1];
+
+            p.marriedName = married ? married.fullName : p.allNames[0].fullName;
+            p.birthName = birth ? birth.fullName : '';
+        } else {
+            p.marriedName = 'Neznámý';
+        }
+
+        p.displayName = p.marriedName;
+
+        if (p.birthName && p.birthName !== p.marriedName) {
+            p.detailName = `${p.marriedName} (roz. ${p.birthName})`;
+        } else {
+            p.detailName = p.marriedName;
+        }
+    });
+
+    Object.values(families).forEach(fam => {
+        let husb = fam.husb && individuals[fam.husb] ? fam.husb : null;
+        let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
+        let kids = fam.children.filter(c => c && individuals[c]);
+
+        let marriageInfo = {
+            date: fam.marriageDate,
+            place: fam.marriagePlace
+        };
+
+        if (husb && wife) {
+            if (!individuals[husb].spouses.includes(wife)) individuals[husb].spouses.push(wife);
+            if (!individuals[wife].spouses.includes(husb)) individuals[wife].spouses.push(husb);
+            
+            if (!individuals[husb].marriages) individuals[husb].marriages = {};
+            if (!individuals[wife].marriages) individuals[wife].marriages = {};
+            individuals[husb].marriages[wife] = marriageInfo;
+            individuals[wife].marriages[husb] = marriageInfo;
+        }
+
+        let parents = [husb, wife].filter(p => p !== null);
+        kids.forEach(childId => {
+            parents.forEach(parentId => {
+                if (!individuals[childId].parents.includes(parentId)) individuals[childId].parents.push(parentId);
+                if (!individuals[parentId].children.includes(childId)) individuals[parentId].children.push(childId);
+            });
+        });
+    });
+
+    let levels = {};
+    function assignLevels(personId, currentLevel, visited = new Set()) {
+        if (visited.has(personId)) return;
+        visited.add(personId);
+        
+        if (!(personId in levels) || currentLevel > levels[personId]) {
+            levels[personId] = currentLevel;
+        }
+        
+        let person = individuals[personId];
+        if (!person) return;
+
+        person.spouses.forEach(spouseId => {
+            if (!(spouseId in levels) || currentLevel >
