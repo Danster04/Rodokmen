@@ -2,21 +2,23 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Můj rodokmen</title>
+    <title>Můj rodokmen – Detailní prohlížeč</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; }
         h1 { margin: 0; font-size: 1.4rem; }
-        #main-container { display: flex; flex-grow: 1; height: calc(100vh - 60px); }
+        #main-container { display: flex; flex-grow: 1; height: calc(100vh - 60px); position: relative; }
         #canvas { flex-grow: 1; background: #ffffff; position: relative; }
-        #sidebar { width: 320px; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); }
+        #sidebar { width: 350px; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; }
         #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
-        .node rect { fill: #ffffff; stroke: #3498db; stroke-width: 2px; rx: 6px; ry: 6px; cursor: pointer; }
+        .node rect { fill: #ffffff; stroke: #3498db; stroke-width: 2px; rx: 6px; ry: 6px; cursor: pointer; transition: fill 0.2s; }
+        .node rect:hover { fill: #ebf5fb; stroke: #2980b9; }
         .node text { font: 12px sans-serif; fill: #2c3e50; pointer-events: none; text-anchor: middle; }
         .link { stroke: #95a5a6; stroke-width: 1.5px; stroke-opacity: 0.6; }
-        ul { padding-left: 20px; }
-        li { margin-bottom: 6px; }
+        .detail-item { margin-bottom: 12px; }
+        .detail-label { font-weight: bold; color: #7f8c8d; font-size: 0.9rem; }
+        .detail-value { font-size: 1.05rem; color: #2c3e50; }
     </style>
 </head>
 <body>
@@ -32,9 +34,26 @@
             <svg id="tree-svg" width="100%" height="100%"></svg>
         </div>
         <div id="sidebar">
-            <h3>Seznam osob</h3>
-            <p id="person-count">Načítám...</p>
-            <ul id="person-list"></ul>
+            <h3>Detail osoby</h3>
+            <p id="no-selection" style="color: #7f8c8d;">Kliknutím na osobu v grafu zafixuješ a zobrazíš její podrobnosti.</p>
+            <div id="person-details" style="display:none;">
+                <div class="detail-item">
+                    <div class="detail-label">Jméno:</div>
+                    <div class="detail-value" id="det-name">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Narození:</div>
+                    <div class="detail-value" id="det-birth">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Úmrtí:</div>
+                    <div class="detail-value" id="det-death">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">ID v databázi:</div>
+                    <div class="detail-value" id="det-id" style="font-family: monospace; font-size: 0.9rem;">-</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -58,6 +77,7 @@ function processGedcomData(text) {
     let families = {};
     let currentId = null;
     let currentType = null;
+    let currentEvent = null;
     let currentFamilyId = null;
 
     lines.forEach(line => {
@@ -69,10 +89,16 @@ function processGedcomData(text) {
         const val = match[3];
 
         if (level === 0) {
+            currentEvent = null;
             if (key.startsWith('@') && key.endsWith('@')) {
                 if (val === 'INDI') {
                     currentId = key;
-                    individuals[currentId] = { id: currentId, name: 'Neznámý' };
+                    individuals[currentId] = { 
+                        id: currentId, 
+                        name: 'Neznámý', 
+                        birthDate: '', birthPlace: '', 
+                        deathDate: '', deathPlace: '' 
+                    };
                     currentFamilyId = null;
                     currentType = 'INDI';
                 } else if (val === 'FAM') {
@@ -87,14 +113,25 @@ function processGedcomData(text) {
                 }
             }
         } else if (level === 1) {
+            currentEvent = null;
             if (currentType === 'INDI') {
                 if (key === 'NAME') {
                     individuals[currentId].name = val.replace(/\//g, '').trim();
+                } else if (key === 'BIRT' || key === 'DEAT') {
+                    currentEvent = key;
                 }
             } else if (currentType === 'FAM') {
                 if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
                 if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
                 if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
+            }
+        } else if (level === 2 && currentType === 'INDI') {
+            if (currentEvent === 'BIRT') {
+                if (key === 'DATE') individuals[currentId].birthDate = val.trim();
+                if (key === 'PLAC') individuals[currentId].birthPlace = val.trim();
+            } else if (currentEvent === 'DEAT') {
+                if (key === 'DATE') individuals[currentId].deathDate = val.trim();
+                if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
             }
         }
     });
@@ -104,19 +141,9 @@ function processGedcomData(text) {
 
     Object.values(individuals).forEach(p => {
         if (p.name !== 'Neznámý') {
-            personMap[p.id] = { id: p.id, name: p.name };
-            nodes.push(personMap[p.id]);
+            personMap[p.id] = p;
+            nodes.push(p);
         }
-    });
-
-    // Vypsání do postranního panelu
-    document.getElementById('person-count').innerText = `Celkem osob: ${nodes.length}`;
-    const listEl = document.getElementById('person-list');
-    listEl.innerHTML = '';
-    nodes.forEach(p => {
-        const li = document.createElement('li');
-        li.innerText = p.name;
-        listEl.appendChild(li);
     });
 
     let links = [];
@@ -150,8 +177,8 @@ function drawNetwork(nodes, links) {
     }));
 
     const simulation = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(links).id(d => d.id).distance(120))
-        .force("charge", d3.forceManyBody().strength(-250))
+        .force("link", d3.forceLink(links).id(d => d.id).distance(130))
+        .force("charge", d3.forceManyBody().strength(-300))
         .force("center", d3.forceCenter(width / 2, height / 2));
 
     const link = g.append("g")
@@ -165,6 +192,9 @@ function drawNetwork(nodes, links) {
         .data(nodes)
         .enter().append("g")
         .attr("class", "node")
+        .on("click", (event, d) => {
+            showDetails(d);
+        })
         .call(d3.drag()
             .on("start", (event, d) => {
                 if (!event.active) simulation.alphaTarget(0.3).restart();
@@ -182,10 +212,10 @@ function drawNetwork(nodes, links) {
             }));
 
     node.append("rect")
-        .attr("width", 140)
-        .attr("height", 36)
-        .attr("x", -70)
-        .attr("y", -18);
+        .attr("width", 150)
+        .attr("height", 40)
+        .attr("x", -75)
+        .attr("y", -20);
 
     node.append("text")
         .attr("y", 4)
@@ -201,6 +231,23 @@ function drawNetwork(nodes, links) {
         node
             .attr("transform", d => `translate(${d.x}, ${d.y})`);
     });
+}
+
+function showDetails(person) {
+    document.getElementById('no-selection').style.display = 'none';
+    document.getElementById('person-details').style.display = 'block';
+
+    document.getElementById('det-name').innerText = person.name || "Neuvedeno";
+    
+    let birth = person.birthDate || "";
+    if (person.birthPlace) birth += " (" + person.birthPlace + ")";
+    document.getElementById('det-birth').innerText = birth || "Neuvedeno";
+
+    let death = person.deathDate || "";
+    if (person.deathPlace) death += " (" + person.deathPlace + ")";
+    document.getElementById('det-death').innerText = death || "Neuvedeno";
+
+    document.getElementById('det-id').innerText = person.id;
 }
 </script>
 
