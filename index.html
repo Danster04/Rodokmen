@@ -210,7 +210,7 @@ function processGedcomData(text) {
                     individuals[currentId].allNames.push(currentNameObj);
                 } else if (key === 'SEX') {
                     individuals[currentId].sex = val.trim();
-                } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU' || key === 'MARR') {
+                } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU' || key === 'MARR' || key === 'EVEN') {
                     currentEvent = key;
                     if (key === 'OCCU') {
                         individuals[currentId].occupation = val.trim();
@@ -248,6 +248,15 @@ function processGedcomData(text) {
                 if (currentEvent === 'MARR') {
                     if (key === 'DATE') individuals[currentId].marriageDate = formatGedcomDate(val.trim());
                     if (key === 'PLAC') individuals[currentId].marriagePlace = val.trim();
+                }
+                if (currentEvent === 'EVEN') {
+                    if (key === 'TYPE' && val.trim().toLowerCase() === 'marriage') {
+                        individuals[currentId].isMarriageEvent = true;
+                    }
+                    if (individuals[currentId].isMarriageEvent) {
+                        if (key === 'DATE') individuals[currentId].marriageDate = formatGedcomDate(val.trim());
+                        if (key === 'PLAC') individuals[currentId].marriagePlace = val.trim();
+                    }
                 }
             } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
                 if (currentEvent === 'MARR') {
