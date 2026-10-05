@@ -93,9 +93,9 @@
                     <div class="detail-label">Povolání / Status</div>
                     <div class="detail-value" id="det-occupation">-</div>
                 </div>
-                <div class="detail-item" id="item-marriage" style="display:none;">
+                <div class="detail-item" id="item-marriage">
                     <div class="detail-label">Manželství</div>
-                    <div class="detail-value" id="det-marriage">-</div>
+                    <div class="detail-value" id="det-marriage">Neuvedeno</div>
                 </div>
                 <div class="detail-item">
                     <div class="detail-label">Úmrtí</div>
@@ -147,7 +147,7 @@ function processGedcomData(text) {
     const lines = text.split(/\r?\n/);
     let individuals = {};
     let families = {};
-    let sharedEvents = {}; // Globální uložení sdílených událostí
+    let sharedEvents = {}; 
     let mediaFiles = {};
     
     let currentId = null;
@@ -255,8 +255,8 @@ function processGedcomData(text) {
         }
     });
 
-    // Z Ulrichova / Gramps zápisu najdeme všechna platná data ze sdílených eventů (manželství)
-    let fallbackMarriageDates = Object.values(sharedEvents).filter(e => e.date);
+    // Získání fallback dat pro manželství ze sdílených událostí
+    let fallbackDates = Object.values(sharedEvents).filter(e => e.date);
 
     Object.values(individuals).forEach(p => {
         if (p.allNames && p.allNames.length > 0) {
@@ -289,9 +289,8 @@ function processGedcomData(text) {
         let mDate = fam.marriageDate;
         let mPlace = fam.marriagePlace;
 
-        // Pokud rodina nemá přímé datum, přiřadíme první nalezené datum ze sdílených událostí jako univerzální zálohu pro daný pár
-        if (!mDate && fallbackMarriageDates.length > 0) {
-            let ev = fallbackMarriageDates.shift(); // Vezme a odstraní jedno z dostupných dat
+        if (!mDate && fallbackDates.length > 0) {
+            let ev = fallbackDates.shift();
             mDate = ev.date;
             mPlace = ev.place;
         }
@@ -545,21 +544,19 @@ function showDetails(person) {
 
     const marItem = document.getElementById('item-marriage');
     const marVal = document.getElementById('det-marriage');
-    if (person.marriages && Object.keys(person.marriages).length > 0) {
+    if (person.spouses && person.spouses.length > 0) {
         let marTexts = [];
-        Object.values(person.marriages).forEach(m => {
-            if (m.date) {
-                let mStr = m.date;
-                if (m.place) mStr += ` (${m.place})`;
-                marTexts.push(mStr);
-            }
-        });
-        if (marTexts.length > 0) {
-            marVal.innerText = marTexts.join('; ');
-            marItem.style.display = 'block';
-        } else {
-            marItem.style.display = 'none';
+        if (person.marriages) {
+            Object.values(person.marriages).forEach(m => {
+                if (m.date) {
+                    let mStr = m.date;
+                    if (m.place) mStr += ` (${m.place})`;
+                    marTexts.push(mStr);
+                }
+            });
         }
+        marVal.innerText = marTexts.length > 0 ? marTexts.join('; ') : "Datum neuvedeno";
+        marItem.style.display = 'block';
     } else {
         marItem.style.display = 'none';
     }
