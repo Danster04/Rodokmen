@@ -3,31 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <title>Můj rodokmen</title>
+    <!-- Načtení knihovny pro vykreslení grafu a GEDCOM parseru -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-dag@1.1.0/dist/d3-dag.iife.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; background: #f9f9f9; color: #333; }
-        h1 { color: #2c3e50; }
-        .card { background: #fff; padding: 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        ul { list-style-type: none; padding: 0; }
-        li { padding: 8px; margin: 4px 0; background: #f1f4f6; border-radius: 4px; }
-        #loading { font-weight: bold; color: #e67e22; }
+        body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; }
+        header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { margin: 0; font-size: 1.4rem; }
+        #canvas { flex-grow: 1; overflow: hidden; background: #ffffff; position: relative; }
+        #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
+        .node rect { fill: #ffffff; stroke: #3498db; stroke-width: 2px; rx: 6px; ry: 6px; }
+        .node text { font: 12px sans-serif; fill: #2c3e50; }
+        .link { fill: none; stroke: #95a5a6; stroke-width: 1.5px; }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h1>Můj rodokmen</h1>
-        <p id="loading">Načítám data z GEDCOM souboru...</p>
-        <p>Zdrojový soubor: <a href="dnes.ged" target="_blank">dnes.ged</a></p>
-    </div>
+    <header>
+        <h1>Můj rodokmen – grafické zobrazení</h1>
+        <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
+    </header>
 
-    <div class="card" id="stats-box" style="display:none;">
-        <h3>Statistika</h3>
-        <p id="person-count"></p>
-    </div>
-
-    <div class="card" id="list-box" style="display:none;">
-        <h3>Seznam osob v databázi</h3>
-        <ul id="person-list"></ul>
+    <div id="canvas">
+        <div id="loading">Načítám a zpracovávám rodokmen...</div>
+        <svg id="tree-svg" width="100%" height="100%"></svg>
     </div>
 
 <script>
@@ -37,58 +36,163 @@ fetch('dnes.ged')
         return response.text();
     })
     .then(data => {
-        parseGedcom(data);
+        processGedcomData(data);
     })
     .catch(error => {
-        document.getElementById('loading').innerText = "Chyba při načítání: " + error.message;
+        document.getElementById('loading').innerText = "Chyba: " + error.message;
+        document.getElementById('loading').style.color = "red";
     });
 
-function parseGedcom(text) {
+function processGedcomData(text) {
     const lines = text.split(/\r?\n/);
-    let persons = {};
+    let individuals = {};
+    let families = {};
     let currentId = null;
-    let currentTag = null;
+    let currentType = null;
+    let currentFamilyId = null;
 
+    // Základní parsování GEDCOM souboru
     lines.forEach(line => {
         const match = line.match(/^([0-9])\s+(@\w+@|[A-Z_]+)\s*(.*)$/);
         if (!match) return;
 
         const level = parseInt(match[1]);
-        const tagOrId = match[2];
-        const value = match[3];
+        const key = match[2];
+        const val = match[3];
 
         if (level === 0) {
-            if (tagOrId.startsWith('@') && tagOrId.endsWith('@')) {
-                currentId = tagOrId;
-                persons[currentId] = { id: currentId, name: 'Neznámý', details: [] };
-                currentTag = null;
-            } else {
-                currentId = null;
+            if (key.startsWith('@') && key.endsWith('@')) {
+                if (val === 'INDI') {
+                    currentId = key;
+                    individuals[currentId] = { id: currentId, name: 'Neznámý', children: [], parents: [] };
+                    currentFamilyId = null;
+                    currentType = 'INDI';
+                } else if (val === 'FAM') {
+                    currentFamilyId = key;
+                    families[currentFamilyId] = { id: currentFamilyId, husb: null, wife: null, children: [] };
+                    currentId = null;
+                    currentType = 'FAM';
+                } else {
+                    currentId = null;
+                    currentFamilyId = null;
+                    currentType = null;
+                }
             }
-        } else if (level === 1 && currentId) {
-            currentTag = tagOrId;
-            if (tagOrId === 'NAME') {
-                persons[currentId].name = value.replace(/\//g, '');
+        } else if (level === 1) {
+            if (currentType === 'INDI') {
+                if (key === 'NAME') {
+                    individuals[currentId].name = val.replace(/\//g, '').trim();
+                } else if (key === 'FAMC') {
+                    individuals[currentId].famc = val.trim();
+                } else if (key === 'FAMS') {
+                    if (!individuals[currentId].fams) individuals[currentId].fams = [];
+                    individuals[currentId].fams.push(val.trim());
+                }
+            } else if (currentType === 'FAM') {
+                if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
+                if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
+                if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
             }
-        } else if (level === 2 && currentId && currentTag === 'NAME') {
-            // Podrobnosti ke jménu, ignorujeme
         }
     });
 
-    const personArray = Object.values(persons).filter(p => p.name !== 'Neznámý');
-    
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('stats-box').style.display = 'block';
-    document.getElementById('list-box').style.display = 'block';
-    
-    document.getElementById('person-count').innerText = `Celkem nalezeno osob: ${personArray.length}`;
+    // Propojení rodinných vazeb
+    let nodes = [];
+    let links = [];
+    let personMap = {};
 
-    const listEl = document.getElementById('person-list');
-    personArray.forEach(p => {
-        const li = document.createElement('li');
-        li.innerText = p.name;
-        listEl.appendChild(li);
+    Object.values(individuals).forEach(p => {
+        if (p.name !== 'Neznámý') {
+            personMap[p.id] = p;
+            nodes.push({ id: p.id, name: p.name });
+        }
     });
+
+    // Vytvoření hierarchie pro strom
+    Object.values(families).forEach(fam => {
+        let kids = fam.children;
+        let parents = [fam.husb, fam.wife].filter(p => p && personMap[p]);
+        
+        kids.forEach(childId => {
+            if (personMap[childId]) {
+                parents.forEach(parentId => {
+                    links.push({ source: parentId, target: childId });
+                });
+            }
+        });
+    });
+
+    document.getElementById('loading').style.display = 'none';
+    drawTree(nodes, links);
+}
+
+function drawTree(nodes, links) {
+    const svg = d3.select("#tree-svg");
+    const width = document.getElementById('canvas').clientWidth;
+    const height = document.getElementById('canvas').clientHeight;
+
+    svg.selectAll("*").remove();
+
+    const g = svg.append("g");
+
+    // Přidání zoomování a posouvání plátna myší
+    svg.call(d3.zoom().on("zoom", (event) => {
+        g.attr("transform", event.transform);
+    }));
+
+    // Hierarchické uspořádání stromu
+    const rootId = nodes.length > 0 ? nodes[0].id : null;
+    if (!rootId) return;
+
+    // Převedení na D3 hierarchii
+    let stratify = d3.stratify()
+        .id(d => d.id)
+        .parentId(d => {
+            let link = links.find(l => l.target === d.id);
+            return link ? link.source : null;
+        });
+
+    // Pokud data tvoří strom, vykreslíme hierarchicky, jinak fallback na seznam uzlů
+    try {
+        let root = stratify(nodes);
+        let treeLayout = d3.tree().nodeSize([120, 80]);
+        treeLayout(root);
+
+        // Vykreslení spojnic (čar)
+        g.selectAll(".link")
+            .data(root.links())
+            .enter().append("path")
+            .attr("class", "link")
+            .attr("d", d3.linkVertical()
+                .x(d => d.x + width / 2)
+                .y(d => d.y + 50));
+
+        // Vykreslení uzlů (boxů lidí)
+        let node = g.selectAll(".node")
+            .data(root.descendants())
+            .enter().append("g")
+            .attr("class", "node")
+            .attr("transform", d => `translate(${d.x + width / 2 - 60}, ${d.y + 30})`);
+
+        node.append("rect")
+            .attr("width", 120)
+            .attr("height", 40);
+
+        node.append("text")
+            .attr("x", 60)
+            .attr("y", 25)
+            .attr("text-anchor", "middle")
+            .text(d => d.data.name);
+
+    } catch (e) {
+        // Fallback, pokud data nejsou čistý strom bez cyklů
+        let simpleBox = svg.append("text")
+            .attr("x", 50)
+            .attr("y", 50)
+            .text("Data obsahují složité vazby. Zobrazeno základní propojení osob.");
+        
+        console.error(e);
+    }
 }
 </script>
 
