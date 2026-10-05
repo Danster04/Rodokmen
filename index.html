@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Můj rodokmen – Manželská i rodná příjmení</title>
+    <title>Můj rodokmen</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -186,7 +186,6 @@ function processGedcomData(text) {
             if (currentType === 'INDI') {
                 if (key === 'NAME') {
                     currentNameObj = { fullName: val.replace(/\//g, '').trim(), type: '' };
-                    // Ak má osoba viaceré mená, uložíme si ich do dočasného poľa
                     if (!individuals[currentId].allNames) individuals[currentId].allNames = [];
                     individuals[currentId].allNames.push(currentNameObj);
                 } else if (key === 'SEX') {
@@ -220,13 +219,12 @@ function processGedcomData(text) {
         }
     });
 
-    // Spracovanie mien: nájdeme manželské aj rodné priezvisko
+    // Zpracování jmen: na kartičce chceme hlavní (manželské) jméno, v detailu obojí
     Object.values(individuals).forEach(p => {
         if (p.allNames && p.allNames.length > 0) {
             let married = p.allNames.find(n => n.type.includes('manžel') || n.type.includes('married'));
             let birth = p.allNames.find(n => n.type.includes('rodn') || n.type.includes('birth'));
 
-            // Ak typy explicitne nesedia, vezmeme prvé ako manželské/hlavné a druhé ako rodné
             if (!married && p.allNames.length > 0) married = p.allNames[0];
             if (!birth && p.allNames.length > 1) birth = p.allNames[1];
 
@@ -236,12 +234,14 @@ function processGedcomData(text) {
             p.marriedName = 'Neznámý';
         }
 
-        // Zostavíme výsledné meno pre zobrazenie: Manželské (roz. Rodné)
+        // Čisté jméno pro kartičku ve stromu (zůstane krátké)
+        p.displayName = p.marriedName;
+
+        // Rozšířené jméno pro panel vpravo (obsahuje i rodné příjmení)
         if (p.birthName && p.birthName !== p.marriedName) {
-            // Vytiahneme len priezvisko z rodného mena ak je to možné, alebo celé
-            p.displayName = `${p.marriedName} (roz. ${p.birthName})`;
+            p.detailName = `${p.marriedName} (roz. ${p.birthName})`;
         } else {
-            p.displayName = p.marriedName;
+            p.detailName = p.marriedName;
         }
     });
 
@@ -354,6 +354,7 @@ function processGedcomData(text) {
             let nodeObj = {
                 id: p.id,
                 name: p.displayName,
+                detailName: p.detailName,
                 sex: p.sex,
                 birth: p.birthDate,
                 birthPlace: p.birthPlace,
@@ -465,7 +466,8 @@ function showDetails(person) {
     if (person.deathPlace) deathText += ` (${person.deathPlace})`;
     document.getElementById('det-death').innerText = deathText;
 
-    document.getElementById('det-name').innerText = person.name || "Neuvedeno";
+    // V detailu vpravo ukážeme celé jméno včetně rodného příjmení
+    document.getElementById('det-name').innerText = person.detailName || "Neuvedeno";
     document.getElementById('det-id').innerText = person.id;
 
     const mediaContainer = document.getElementById('media-container');
