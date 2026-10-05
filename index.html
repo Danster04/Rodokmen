@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Můj rodokmen – Muži vlevo, místa událostí</title>
+    <title>Můj rodokmen – Manželská i rodná příjmení</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -143,6 +143,7 @@ function processGedcomData(text) {
     let currentType = null;
     let currentEvent = null;
     let currentFamilyId = null;
+    let currentNameObj = null;
 
     lines.forEach(line => {
         const match = line.match(/^([0-9])\s+(@\w+@|[A-Z_]+)\s*(.*)$/);
@@ -154,11 +155,12 @@ function processGedcomData(text) {
 
         if (level === 0) {
             currentEvent = null;
+            currentNameObj = null;
             if (key.startsWith('@') && key.endsWith('@')) {
                 if (val === 'INDI') {
                     currentId = key;
                     individuals[currentId] = { 
-                        id: currentId, name: 'Neznámý', sex: 'U',
+                        id: currentId, firstName: '', marriedName: '', birthName: '', sex: 'U',
                         birthDate: '', birthPlace: '', deathDate: '', deathPlace: '',
                         parents: [], children: [], spouses: [], media: [] 
                     };
@@ -182,10 +184,18 @@ function processGedcomData(text) {
         } else if (level === 1) {
             currentEvent = null;
             if (currentType === 'INDI') {
-                if (key === 'NAME') individuals[currentId].name = val.replace(/\//g, '').trim();
-                else if (key === 'SEX') individuals[currentId].sex = val.trim();
-                else if (key === 'BIRT' || key === 'DEAT') currentEvent = key;
-                else if (key === 'OBJE') individuals[currentId].media.push(val.trim());
+                if (key === 'NAME') {
+                    currentNameObj = { fullName: val.replace(/\//g, '').trim(), type: '' };
+                    // Ak má osoba viaceré mená, uložíme si ich do dočasného poľa
+                    if (!individuals[currentId].allNames) individuals[currentId].allNames = [];
+                    individuals[currentId].allNames.push(currentNameObj);
+                } else if (key === 'SEX') {
+                    individuals[currentId].sex = val.trim();
+                } else if (key === 'BIRT' || key === 'DEAT') {
+                    currentEvent = key;
+                } else if (key === 'OBJE') {
+                    individuals[currentId].media.push(val.trim());
+                }
             } else if (currentType === 'FAM') {
                 if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
                 if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
@@ -195,6 +205,9 @@ function processGedcomData(text) {
             }
         } else if (level === 2) {
             if (currentType === 'INDI') {
+                if (currentNameObj && key === 'TYPE') {
+                    currentNameObj.type = val.trim().toLowerCase();
+                }
                 if (currentEvent === 'BIRT') {
                     if (key === 'DATE') individuals[currentId].birthDate = formatGedcomDate(val.trim());
                     if (key === 'PLAC') individuals[currentId].birthPlace = val.trim();
@@ -204,6 +217,31 @@ function processGedcomData(text) {
                     if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
                 }
             }
+        }
+    });
+
+    // Spracovanie mien: nájdeme manželské aj rodné priezvisko
+    Object.values(individuals).forEach(p => {
+        if (p.allNames && p.allNames.length > 0) {
+            let married = p.allNames.find(n => n.type.includes('manžel') || n.type.includes('married'));
+            let birth = p.allNames.find(n => n.type.includes('rodn') || n.type.includes('birth'));
+
+            // Ak typy explicitne nesedia, vezmeme prvé ako manželské/hlavné a druhé ako rodné
+            if (!married && p.allNames.length > 0) married = p.allNames[0];
+            if (!birth && p.allNames.length > 1) birth = p.allNames[1];
+
+            p.marriedName = married ? married.fullName : p.allNames[0].fullName;
+            p.birthName = birth ? birth.fullName : '';
+        } else {
+            p.marriedName = 'Neznámý';
+        }
+
+        // Zostavíme výsledné meno pre zobrazenie: Manželské (roz. Rodné)
+        if (p.birthName && p.birthName !== p.marriedName) {
+            // Vytiahneme len priezvisko z rodného mena ak je to možné, alebo celé
+            p.displayName = `${p.marriedName} (roz. ${p.birthName})`;
+        } else {
+            p.displayName = p.marriedName;
         }
     });
 
@@ -258,18 +296,18 @@ function processGedcomData(text) {
         });
     }
 
-    let roots = Object.values(individuals).filter(p => p.name !== 'Neznámý' && p.parents.length === 0);
-    if (roots.length === 0) roots = Object.values(individuals).filter(p => p.name !== 'Neznámý');
+    let roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý' && p.parents.length === 0);
+    if (roots.length === 0) roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý');
 
     roots.forEach(root => assignLevels(root.id, 0));
 
     Object.values(individuals).forEach(p => {
-        if (p.name !== 'Neznámý' && !(p.id in levels)) levels[p.id] = 0;
+        if (p.marriedName !== 'Neznámý' && !(p.id in levels)) levels[p.id] = 0;
     });
 
     let genGroups = {};
     Object.values(individuals).forEach(p => {
-        if (p.name === 'Neznámý') return;
+        if (p.marriedName === 'Neznámý') return;
         let lvl = levels[p.id] || 0;
         if (!genGroups[lvl]) genGroups[lvl] = [];
         genGroups[lvl].push(p);
@@ -283,7 +321,6 @@ function processGedcomData(text) {
     Object.keys(genGroups).sort((a,b) => a - b).forEach(lvl => {
         let personsInGen = genGroups[lvl];
         
-        // Zde zajistíme, aby v rámci generace byli partneři u sebe a muž vlevo, žena vpravo
         let orderedPersons = [];
         let processed = new Set();
 
@@ -292,18 +329,15 @@ function processGedcomData(text) {
             orderedPersons.push(p);
             processed.add(p.id);
 
-            // Pokud má manžela/manželku, hned ho/ji zařadíme vedle
             let spouseId = p.spouses.find(sId => personsInGen.some(sp => sp.id === sId) && !processed.has(sId));
             if (spouseId) {
                 let spouse = individuals[spouseId];
-                // Vynutíme pořadí: muž vlevo, žena vpravo
                 let first = p;
                 let second = spouse;
                 if (p.sex === 'F' && spouse.sex === 'M') {
                     first = spouse;
                     second = p;
                 }
-                // Nahradíme poslední prvek a přidáme druhého
                 orderedPersons[orderedPersons.length - 1] = first;
                 processed.add(first.id);
                 orderedPersons.push(second);
@@ -319,7 +353,7 @@ function processGedcomData(text) {
 
             let nodeObj = {
                 id: p.id,
-                name: p.name,
+                name: p.displayName,
                 sex: p.sex,
                 birth: p.birthDate,
                 birthPlace: p.birthPlace,
@@ -423,12 +457,10 @@ function showDetails(person) {
     document.getElementById('no-selection').style.display = 'none';
     document.getElementById('person-details').style.display = 'block';
 
-    // Sestavení textu narození včetně místa
     let birthText = person.birth || "Neuvedeno";
     if (person.birthPlace) birthText += ` (${person.birthPlace})`;
     document.getElementById('det-birth').innerText = birthText;
 
-    // Sestavení textu úmrtí včetně místa
     let deathText = person.death || "Neuvedeno";
     if (person.deathPlace) deathText += ` (${person.deathPlace})`;
     document.getElementById('det-death').innerText = deathText;
