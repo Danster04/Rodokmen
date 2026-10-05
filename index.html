@@ -180,10 +180,7 @@ function processGedcomData(text) {
             }
         }
 
-        let marriageInfo = {
-            date: mDate,
-            place: mPlace
-        };
+        let marriageInfo = { date: mDate, place: mPlace };
 
         if (husb && wife) {
             if (!individuals[husb].spouses.includes(wife)) individuals[husb].spouses.push(wife);
@@ -250,17 +247,13 @@ function processGedcomData(text) {
         if (p.marriedName !== 'Neznámý' && !(p.id in levels)) levels[p.id] = 0;
     });
 
-    // PŘÍSNÝ FILTR NA PÁTEŘ: Osoba musí být v přímé sestupné linii (má rodiče v přímé linii A ZÁROVEŇ má dítě v přímé linii), NEBO to musí být koncový kořen / nejmladší potomek (Bohdan).
-    // Tímto odfiltrujeme sourozence (jako je druhá Barbora), kteří sice mají rodiče v linii, ale sami nemají pokračovatele v přímém stromu.
     let spinePersons = Object.values(individuals).filter(p => {
         if (p.marriedName === 'Neznámý') return false;
         
-        let isBohdan = p.children.length === 0 && p.parents.length > 0; // nebo nejmladší prvek
+        let isBohdan = p.children.length === 0 && p.parents.length > 0;
         let hasChildInTree = p.children.some(cId => individuals[cId] && individuals[cId].marriedName !== 'Neznámý');
         let hasParentInTree = p.parents.some(pId => individuals[pId] && individuals[pId].marriedName !== 'Neznámý');
         let isRoot = p.parents.length === 0 && p.children.length > 0;
-
-        // Pro lidi uprostřed stromu (mezi kořenem a koncem) vyžadujeme, aby měli rodiče v linii A ZÁROVEŇ dítě v linii.
         let isMiddleSpine = hasParentInTree && hasChildInTree;
 
         return isRoot || isMiddleSpine || isBohdan;
@@ -280,7 +273,6 @@ function processGedcomData(text) {
 
     Object.keys(genGroups).sort((a,b) => a - b).forEach(lvl => {
         let personsInGen = genGroups[lvl];
-        
         let orderedPersons = [];
         let processed = new Set();
 
