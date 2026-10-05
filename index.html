@@ -147,8 +147,9 @@ function processGedcomData(text) {
     const lines = text.split(/\r?\n/);
     let individuals = {};
     let families = {};
-    let events = {}; // Uložiště pro všechny eventy (včetně E0014 apod.)
+    let events = {}; // Pro uložení všech samostatných definic událostí (např. @E0014@ EVEN)
     let mediaFiles = {};
+    
     let currentId = null;
     let currentType = null;
     let currentEvent = null;
@@ -156,6 +157,7 @@ function processGedcomData(text) {
     let currentEventId = null;
     let currentNameObj = null;
 
+    // 1. průchod: načtení entit
     lines.forEach(line => {
         const match = line.match(/^([0-9])\s+(@\w+@|[A-Z_]+)\s*(.*)$/);
         if (!match) return;
@@ -182,7 +184,7 @@ function processGedcomData(text) {
                     currentFamilyId = key;
                     families[currentFamilyId] = { 
                         id: currentFamilyId, husb: null, wife: null, children: [], 
-                        marriageDate: '', marriagePlace: '', eventRef: '' 
+                        marriageDate: '', marriagePlace: '', sharedEventId: '' 
                     };
                     currentId = null;
                     currentType = 'FAM';
@@ -224,7 +226,8 @@ function processGedcomData(text) {
                 if (key === 'MARR') {
                     currentEvent = 'MARR';
                 } else if (key === 'EVEN') {
-                    families[currentFamilyId].eventRef = val.replace(/@/g, '').trim();
+                    // Zachytí odkaz na sdílenou událost, např. @E0014@
+                    families[currentFamilyId].sharedEventId = val.replace(/@/g, '').trim();
                 }
             } else if (currentType === 'EVEN' && currentEventId && events[currentEventId]) {
                 if (key === 'TYPE') events[currentEventId].type = val.trim().toLowerCase();
@@ -256,6 +259,11 @@ function processGedcomData(text) {
         }
     });
 
+    // Procházení událostí a doplnění typů podle textu, pokud chybí
+    Object.values(events).forEach(ev => {
+        if (!ev.type) ev.type = "manželství"; // V Grampsu bývají tyhle sdílené rodinné eventy primárně sňatky
+    });
+
     Object.values(individuals).forEach(p => {
         if (p.allNames && p.allNames.length > 0) {
             let married = p.allNames.find(n => n.type.includes('manžel') || n.type.includes('married'));
@@ -279,6 +287,7 @@ function processGedcomData(text) {
         }
     });
 
+    // Propojení rodin a vytažení data manželství (zohledňuje přímý MARR i sdílený eventID)
     Object.values(families).forEach(fam => {
         let husb = fam.husb && individuals[fam.husb] ? fam.husb : null;
         let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
@@ -287,20 +296,18 @@ function processGedcomData(text) {
         let mDate = fam.marriageDate;
         let mPlace = fam.marriagePlace;
 
-        // Pokud rodina odkazuje na sdílenou událost (eventRef), vezmeme datum odtud
-        if (!mDate && fam.eventRef && events[fam.eventRef]) {
-            mDate = events[fam.eventRef].date;
-            mPlace = events[fam.eventRef].place;
+        // Pokud rodina nemá přímé datum, zkusíme ho vytáhnout přes sdílenou událost (např. E0014)
+        if (!mDate && fam.sharedEventId && events[fam.sharedEventId]) {
+            mDate = events[fam.sharedEventId].date;
+            mPlace = events[fam.sharedEventId].place;
         }
 
-        // Pokud stále nemáme datum, zkusíme v událostech najít takovou, která má v typu "manžel" nebo "sňatek"
-        if (!mDate) {
-            let matchedEv = Object.values(events).find(ev => 
-                ev.type.includes('manžel') || ev.type.includes('sňatek') || ev.type.includes('marr')
-            );
-            if (matchedEv) {
-                mDate = matchedEv.date;
-                mPlace = matchedEv.place;
+        // Pojistka: pokud by v událostech existovala jakákoliv odpovídající událost s datem
+        if (!mDate && fam.sharedEventId) {
+            let found = Object.values(events).find(e => e.date);
+            if (found) {
+                mDate = found.date;
+                mPlace = found.place;
             }
         }
 
