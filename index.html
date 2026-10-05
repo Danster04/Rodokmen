@@ -175,7 +175,7 @@ function processGedcomData(text) {
                     individuals[currentId] = { 
                         id: currentId, firstName: '', marriedName: '', birthName: '', sex: 'U',
                         birthDate: '', birthPlace: '', deathDate: '', deathPlace: '',
-                        occupation: '', parents: [], children: [], spouses: [], media: [] 
+                        occupation: '', marriageDate: '', marriagePlace: '', parents: [], children: [], spouses: [], media: [] 
                     };
                     currentFamilyId = null;
                     currentType = 'INDI';
@@ -210,7 +210,7 @@ function processGedcomData(text) {
                     individuals[currentId].allNames.push(currentNameObj);
                 } else if (key === 'SEX') {
                     individuals[currentId].sex = val.trim();
-                } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU') {
+                } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU' || key === 'MARR') {
                     currentEvent = key;
                     if (key === 'OCCU') {
                         individuals[currentId].occupation = val.trim();
@@ -244,6 +244,10 @@ function processGedcomData(text) {
                 if (currentEvent === 'DEAT') {
                     if (key === 'DATE') individuals[currentId].deathDate = formatGedcomDate(val.trim());
                     if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
+                }
+                if (currentEvent === 'MARR') {
+                    if (key === 'DATE') individuals[currentId].marriageDate = formatGedcomDate(val.trim());
+                    if (key === 'PLAC') individuals[currentId].marriagePlace = val.trim();
                 }
             } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
                 if (currentEvent === 'MARR') {
@@ -288,19 +292,20 @@ function processGedcomData(text) {
         let mDate = fam.marriageDate;
         let mPlace = fam.marriagePlace;
 
+        if (!mDate && husb && individuals[husb].marriageDate) {
+            mDate = individuals[husb].marriageDate;
+            mPlace = individuals[husb].marriagePlace;
+        }
+        if (!mDate && wife && individuals[wife].marriageDate) {
+            mDate = individuals[wife].marriageDate;
+            mPlace = individuals[wife].marriagePlace;
+        }
+
         if (!mDate && fam.sharedEventRef) {
             let evKey = '@' + fam.sharedEventRef + '@';
             if (sharedEvents[evKey] && sharedEvents[evKey].date) {
                 mDate = sharedEvents[evKey].date;
                 mPlace = sharedEvents[evKey].place;
-            }
-        }
-
-        if (!mDate) {
-            let fallbackEv = Object.values(sharedEvents).find(e => e.date);
-            if (fallbackEv) {
-                mDate = fallbackEv.date;
-                mPlace = fallbackEv.place;
             }
         }
 
