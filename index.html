@@ -2,23 +2,34 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Můj rodokmen – Správné rodinné vazby</title>
+    <title>Můj rodokmen – Barevné generace</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; }
         h1 { margin: 0; font-size: 1.4rem; }
         #main-container { display: flex; flex-grow: 1; height: calc(100vh - 60px); position: relative; }
-        #canvas { flex-grow: 1; background: #ffffff; position: relative; overflow: hidden; cursor: grab; }
+        #canvas { flex-grow: 1; background: #fcfcfc; position: relative; overflow: hidden; cursor: grab; }
         #canvas:active { cursor: grabbing; }
         #sidebar { width: 400px; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; }
         #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
         
-        .node rect { fill: #ffffff; stroke: #3498db; stroke-width: 2px; rx: 6px; ry: 6px; cursor: pointer; transition: fill 0.2s; }
-        .node rect:hover { fill: #ebf5fb; stroke: #2980b9; }
-        .node text { font: 12px sans-serif; fill: #2c3e50; pointer-events: none; text-anchor: middle; font-weight: bold; }
-        .node-subtext { font: 10px sans-serif; fill: #7f8c8d; pointer-events: none; text-anchor: middle; }
-        .link { stroke: #95a5a6; stroke-width: 1.5px; fill: none; opacity: 0.7; }
+        /* Styly pro kartičky s jemným difuzním stínem */
+        .node rect { stroke-width: 1.5px; rx: 8px; ry: 8px; cursor: pointer; transition: all 0.2s; filter: drop-shadow(0px 4px 6px rgba(0, 0, 0, 0.08)); }
+        .node rect:hover { filter: drop-shadow(0px 6px 10px rgba(0, 0, 0, 0.15)); stroke-width: 2px; }
+        
+        /* Barvy podle pohlaví */
+        .node-male rect { fill: #ebf5fb; stroke: #3498db; }
+        .node-male rect:hover { fill: #d4e6f1; stroke: #2980b9; }
+        .node-male text { fill: #1b4f72; }
+
+        .node-female rect { fill: #fdf2e9; stroke: #e59866; }
+        .node-female rect:hover { fill: #fae5d3; stroke: #dc7633; }
+        .node-female text { fill: #78281f; }
+
+        .node text { font: 12px sans-serif; pointer-events: none; text-anchor: middle; font-weight: bold; }
+        .node-subtext { font: 10px sans-serif; fill: #7f8c8d; pointer-events: none; text-anchor: middle; font-weight: normal; }
+        .link { stroke: #bdc3c7; stroke-width: 1.5px; fill: none; opacity: 0.8; }
 
         .detail-item { margin-bottom: 15px; }
         .detail-label { font-weight: bold; color: #7f8c8d; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 3px; }
@@ -31,13 +42,13 @@
 <body>
 
     <header>
-        <h1>Můj rodokmen – Páry a generace</h1>
+        <h1>Můj rodokmen – Barevné generace</h1>
         <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
     </header>
 
     <div id="main-container">
         <div id="canvas">
-            <div id="loading">Skládám rodinné vazby...</div>
+            <div id="loading">Skládám graf...</div>
             <svg id="tree-svg" width="100%" height="100%"></svg>
         </div>
         <div id="sidebar">
@@ -106,7 +117,7 @@ function processGedcomData(text) {
                 if (val === 'INDI') {
                     currentId = key;
                     individuals[currentId] = { 
-                        id: currentId, name: 'Neznámý', 
+                        id: currentId, name: 'Neznámý', sex: 'U',
                         birthDate: '', deathDate: '', 
                         parents: [], children: [], spouses: [], media: [] 
                     };
@@ -131,6 +142,7 @@ function processGedcomData(text) {
             currentEvent = null;
             if (currentType === 'INDI') {
                 if (key === 'NAME') individuals[currentId].name = val.replace(/\//g, '').trim();
+                else if (key === 'SEX') individuals[currentId].sex = val.trim();
                 else if (key === 'BIRT' || key === 'DEAT') currentEvent = key;
                 else if (key === 'OBJE') individuals[currentId].media.push(val.trim());
             } else if (currentType === 'FAM') {
@@ -148,7 +160,6 @@ function processGedcomData(text) {
         }
     });
 
-    // Zpracování rodin (propojení manželů a dětí)
     Object.values(families).forEach(fam => {
         let husb = fam.husb && individuals[fam.husb] ? fam.husb : null;
         let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
@@ -168,7 +179,6 @@ function processGedcomData(text) {
         });
     });
 
-    // Výpočet generací tak, aby manželé byli garantovaně ve stejné generaci
     let levels = {};
     function assignLevels(personId, currentLevel, visited = new Set()) {
         if (visited.has(personId)) return;
@@ -181,19 +191,16 @@ function processGedcomData(text) {
         let person = individuals[personId];
         if (!person) return;
 
-        // Manželé musí mít stejnou generaci
         person.spouses.forEach(spouseId => {
             if (!(spouseId in levels) || currentLevel > levels[spouseId]) {
                 levels[spouseId] = currentLevel;
             }
         });
 
-        // Děti jsou o generaci níže
         person.children.forEach(childId => {
             assignLevels(childId, currentLevel + 1, new Set(visited));
         });
         
-        // Manželé také propagují generaci dětí
         person.spouses.forEach(spouseId => {
             let spouse = individuals[spouseId];
             if (spouse) {
@@ -213,7 +220,6 @@ function processGedcomData(text) {
         if (p.name !== 'Neznámý' && !(p.id in levels)) levels[p.id] = 0;
     });
 
-    // Seskupení podle generací
     let genGroups = {};
     Object.values(individuals).forEach(p => {
         if (p.name === 'Neznámý') return;
@@ -238,6 +244,7 @@ function processGedcomData(text) {
             let nodeObj = {
                 id: p.id,
                 name: p.name,
+                sex: p.sex,
                 birth: p.birthDate,
                 death: p.deathDate,
                 media: resolvedMedia,
@@ -290,7 +297,6 @@ function drawStructuredTree(nodes, links) {
     svg.call(zoom);
     svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, 40).scale(0.8));
 
-    // Vykreslení čar
     const link = g.append("g")
         .selectAll("path")
         .data(links)
@@ -306,12 +312,11 @@ function drawStructuredTree(nodes, links) {
         })
         .style("stroke-dasharray", d => d.type === 'partner' ? "4,4" : "none");
 
-    // Vykreslení uzlů
     const node = g.append("g")
         .selectAll("g")
         .data(nodes)
         .enter().append("g")
-        .attr("class", "node")
+        .attr("class", d => `node ${d.sex === 'F' ? 'node-female' : 'node-male'}`)
         .attr("transform", d => `translate(${d.x}, ${d.y})`)
         .on("click", (event, d) => showDetails(d));
 
