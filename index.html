@@ -11,16 +11,14 @@
         h1 { margin: 0; font-size: 1.4rem; }
         
         #main-container { display: flex; flex-direction: row; flex-grow: 1; height: calc(100vh - 60px); position: relative; overflow: hidden; }
-        
         #canvas { flex-grow: 1; background: #fcfcfc; position: relative; overflow: hidden; cursor: grab; }
         #canvas:active { cursor: grabbing; }
-        
         #sidebar { width: 400px; flex-shrink: 0; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; box-sizing: border-box; }
         #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
-        
+
         .node rect { stroke-width: 1.5px; rx: 6px; ry: 6px; cursor: pointer; transition: all 0.2s; filter: drop-shadow(4px 6px 8px rgba(0, 0, 0, 0.35)); }
         .node rect:hover { filter: drop-shadow(5px 8px 12px rgba(0, 0, 0, 0.45)); stroke-width: 2px; }
-        
+
         .node-male rect { fill: #ebf5fb; stroke: #3498db; }
         .node-male rect:hover { fill: #d4e6f1; stroke: #2980b9; }
         .node-male .node-name { fill: #154360; font-weight: bold; font-size: 13px; }
@@ -117,7 +115,7 @@
 function formatGedcomDate(dateStr) {
     if (!dateStr) return "";
     const months = {
-        "JAN": "leden", "FEB": "únor", "MAR": "březen", 
+        "JAN": "leden", "FEB": "únor", "MAR": "březen",
         "APR": "duben", "MAY": "květen", "JUN": "červen", 
         "JUL": "červenec", "AUG": "srpen", "SEP": "září", 
         "OCT": "říjen", "NOV": "listopad", "DEC": "prosinec"
@@ -149,7 +147,7 @@ function processGedcomData(text) {
     let families = {};
     let sharedEvents = {}; 
     let mediaFiles = {};
-    
+
     let currentId = null;
     let currentType = null;
     let currentEvent = null;
@@ -169,6 +167,7 @@ function processGedcomData(text) {
             currentEvent = null;
             currentNameObj = null;
             currentEventId = null;
+
             if (key.startsWith('@') && key.endsWith('@')) {
                 if (val === 'INDI') {
                     currentId = key;
@@ -209,8 +208,7 @@ function processGedcomData(text) {
                     if (!individuals[currentId].allNames) individuals[currentId].allNames = [];
                     individuals[currentId].allNames.push(currentNameObj);
                 } else if (key === 'SEX') {
-                    individuals[currentId].sex =
- val.trim();
+                    individuals[currentId].sex = val.trim();
                 } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU' || key === 'MARR' || key === 'EVEN') {
                     currentEvent = key;
                     if (key === 'OCCU') {
@@ -286,7 +284,6 @@ function processGedcomData(text) {
         }
 
         p.displayName = p.marriedName;
-
         if (p.birthName && p.birthName !== p.marriedName) {
             p.detailName = `${p.marriedName} (roz. ${p.birthName})`;
         } else {
@@ -299,7 +296,6 @@ function processGedcomData(text) {
         let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
         let kids = fam.children.filter(c => c && individuals[c]);
 
-        // Detekce rodiny, kde je pouze jeden rodič (např. svobodná matka)
         if ((husb && !wife) || (!husb && wife)) {
             let singleParentId = husb || wife;
             if (kids.length > 0) {
@@ -318,7 +314,6 @@ function processGedcomData(text) {
             mDate = individuals[wife].marriageDate;
             mPlace = individuals[wife].marriagePlace;
         }
-
         if (!mDate && fam.sharedEventRef) {
             let evKey = '@' + fam.sharedEventRef + '@';
             if (sharedEvents[evKey] && sharedEvents[evKey].date) {
@@ -327,10 +322,7 @@ function processGedcomData(text) {
             }
         }
 
-        let marriageInfo = {
-            date: mDate,
-            place: mPlace
-        };
+        let marriageInfo = { date: mDate, place: mPlace };
 
         if (husb && wife) {
             if (!individuals[husb].spouses.includes(wife)) individuals[husb].spouses.push(wife);
@@ -373,6 +365,12 @@ function processGedcomData(text) {
             assignLevels(childId, currentLevel + 1, new Set(visited));
         });
         
+        person.parents.forEach(parentId => {
+            if (!(parentId in levels) || currentLevel - 1 > levels[parentId]) {
+                assignLevels(parentId, currentLevel - 1, new Set(visited));
+            }
+        });
+
         person.spouses.forEach(spouseId => {
             let spouse = individuals[spouseId];
             if (spouse) {
@@ -388,8 +386,11 @@ function processGedcomData(text) {
 
     roots.forEach(root => assignLevels(root.id, 0));
 
+    // Pojistka pro opuštěné uzly v nepřímých liniích
     Object.values(individuals).forEach(p => {
-        if (p.marriedName !== 'Neznámý' && !(p.id in levels)) levels[p.id] = 0;
+        if (p.marriedName !== 'Neznámý' && !(p.id in levels)) {
+            levels[p.id] = 0;
+        }
     });
 
     let genGroups = {};
@@ -407,7 +408,6 @@ function processGedcomData(text) {
 
     Object.keys(genGroups).sort((a,b) => a - b).forEach(lvl => {
         let personsInGen = genGroups[lvl];
-        
         let orderedPersons = [];
         let processed = new Set();
 
@@ -436,8 +436,7 @@ function processGedcomData(text) {
             let x = (index - orderedPersons.length / 2) * colWidth + colWidth / 2;
             let y = parseInt(lvl) * rowHeight + 60;
             
-            let resolvedMedia = p.media.map(mId => mediaFiles[mId] ? mediaFiles[mId].file
- : mId);
+            let resolvedMedia = p.media.map(mId => mediaFiles[mId] ? mediaFiles[mId].file : mId);
 
             let nodeObj = {
                 id: p.id,
