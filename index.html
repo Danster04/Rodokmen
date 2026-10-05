@@ -147,11 +147,13 @@ function processGedcomData(text) {
     const lines = text.split(/\r?\n/);
     let individuals = {};
     let families = {};
+    let events = {}; // Uložiště pro všechny eventy (včetně E0014 apod.)
     let mediaFiles = {};
     let currentId = null;
     let currentType = null;
     let currentEvent = null;
     let currentFamilyId = null;
+    let currentEventId = null;
     let currentNameObj = null;
 
     lines.forEach(line => {
@@ -165,6 +167,7 @@ function processGedcomData(text) {
         if (level === 0) {
             currentEvent = null;
             currentNameObj = null;
+            currentEventId = null;
             if (key.startsWith('@') && key.endsWith('@')) {
                 if (val === 'INDI') {
                     currentId = key;
@@ -179,10 +182,14 @@ function processGedcomData(text) {
                     currentFamilyId = key;
                     families[currentFamilyId] = { 
                         id: currentFamilyId, husb: null, wife: null, children: [], 
-                        marriageDate: '', marriagePlace: '' 
+                        marriageDate: '', marriagePlace: '', eventRef: '' 
                     };
                     currentId = null;
                     currentType = 'FAM';
+                } else if (val === 'EVEN') {
+                    currentEventId = key;
+                    events[currentEventId] = { id: currentEventId, type: '', date: '', place: '' };
+                    currentType = 'EVEN';
                 } else if (val === 'OBJE') {
                     currentId = key;
                     mediaFiles[currentId] = { id: currentId, file: '' };
@@ -216,7 +223,11 @@ function processGedcomData(text) {
                 if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
                 if (key === 'MARR') {
                     currentEvent = 'MARR';
+                } else if (key === 'EVEN') {
+                    families[currentFamilyId].eventRef = val.replace(/@/g, '').trim();
                 }
+            } else if (currentType === 'EVEN' && currentEventId && events[currentEventId]) {
+                if (key === 'TYPE') events[currentEventId].type = val.trim().toLowerCase();
             } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
                 if (key === 'FILE') mediaFiles[currentId].file = val.replace(/["']/g, '').trim();
             }
@@ -238,6 +249,9 @@ function processGedcomData(text) {
                     if (key === 'DATE') families[currentFamilyId].marriageDate = formatGedcomDate(val.trim());
                     if (key === 'PLAC') families[currentFamilyId].marriagePlace = val.trim();
                 }
+            } else if (currentType === 'EVEN' && currentEventId && events[currentEventId]) {
+                if (key === 'DATE') events[currentEventId].date = formatGedcomDate(val.trim());
+                if (key === 'PLAC') events[currentEventId].place = val.trim();
             }
         }
     });
@@ -259,7 +273,7 @@ function processGedcomData(text) {
         p.displayName = p.marriedName;
 
         if (p.birthName && p.birthName !== p.marriedName) {
-            p.detailName = `${p.marriedName} (roz.${p.birthName})`;
+            p.detailName = `${p.marriedName} (roz. ${p.birthName})`;
         } else {
             p.detailName = p.marriedName;
         }
@@ -270,9 +284,29 @@ function processGedcomData(text) {
         let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
         let kids = fam.children.filter(c => c && individuals[c]);
 
+        let mDate = fam.marriageDate;
+        let mPlace = fam.marriagePlace;
+
+        // Pokud rodina odkazuje na sdílenou událost (eventRef), vezmeme datum odtud
+        if (!mDate && fam.eventRef && events[fam.eventRef]) {
+            mDate = events[fam.eventRef].date;
+            mPlace = events[fam.eventRef].place;
+        }
+
+        // Pokud stále nemáme datum, zkusíme v událostech najít takovou, která má v typu "manžel" nebo "sňatek"
+        if (!mDate) {
+            let matchedEv = Object.values(events).find(ev => 
+                ev.type.includes('manžel') || ev.type.includes('sňatek') || ev.type.includes('marr')
+            );
+            if (matchedEv) {
+                mDate = matchedEv.date;
+                mPlace = matchedEv.place;
+            }
+        }
+
         let marriageInfo = {
-            date: fam.marriageDate,
-            place: fam.marriagePlace
+            date: mDate,
+            place: mPlace
         };
 
         if (husb && wife) {
@@ -450,10 +484,10 @@ function drawStructuredTree(nodes, links) {
         .attr("class", "link")
         .attr("d", d => {
             if (d.type === 'partner') {
-                return `M ${d.source.x}${d.source.y} L ${d.target.x}${d.target.y}`;
+                return `M ${d.source.x} ${d.source.y} L ${d.target.x} ${d.target.y}`;
             } else {
                 let midY = (d.source.y + d.target.y) / 2;
-                return `M ${d.source.x} ${d.source.y} V${midY} H ${d.target.x} V${d.target.y}`;
+                return `M ${d.source.x} ${d.source.y} V ${midY} H ${d.target.x} V ${d.target.y}`;
             }
         })
         .style("stroke-dasharray", d => d.type === 'partner' ? "4,4" : "none");
@@ -463,7 +497,7 @@ function drawStructuredTree(nodes, links) {
         .data(nodes)
         .enter().append("g")
         .attr("class", d => `node ${d.sex === 'F' ? 'node-female' : 'node-male'}`)
-        .attr("transform", d => `translate(${d.x},${d.y})`)
+        .attr("transform", d => `translate(${d.x}, ${d.y})`)
         .on("click", (event, d) => {
             showDetails(d);
             if (window.innerWidth <= 1200) {
@@ -540,7 +574,7 @@ function showDetails(person) {
 
     const mediaContainer = document.getElementById('media-container');
     const mediaDiv = document.getElementById('det-media');
-    mediaDiv.innerHTML = '`';
+    mediaDiv.innerHTML = '';
 
     if (person.media && person.media.length > 0) {
         mediaContainer.style.display = 'block';
@@ -558,7 +592,6 @@ function showDetails(person) {
                 itemWrapper.appendChild(video);
 
                 let warn = document.createElement('div');
-                warn.className.style = 'path-warning'; // opraveno
                 warn.className = 'path-warning';
                 warn.innerText = `✓ Video úspěšně spárováno a připraveno k přehrání.`;
                 itemWrapper.appendChild(warn);
