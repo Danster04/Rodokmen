@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Můj rodokmen – Barevné generace</title>
+    <title>Můj rodokmen – Jemně růžová a stíny</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -14,18 +14,19 @@
         #sidebar { width: 400px; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; }
         #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
         
-        /* Styly pro kartičky s jemným difuzním stínem */
-        .node rect { stroke-width: 1.5px; rx: 8px; ry: 8px; cursor: pointer; transition: all 0.2s; filter: drop-shadow(0px 4px 6px rgba(0, 0, 0, 0.08)); }
-        .node rect:hover { filter: drop-shadow(0px 6px 10px rgba(0, 0, 0, 0.15)); stroke-width: 2px; }
+        /* Styly pro kartičky a měkce rozmazaný stín vpravo dolů */
+        .node rect { stroke-width: 1.5px; rx: 6px; ry: 6px; cursor: pointer; transition: all 0.2s; filter: drop-shadow(4px 6px 6px rgba(0, 0, 0, 0.2)); }
+        .node rect:hover { filter: drop-shadow(5px 8px 10px rgba(0, 0, 0, 0.25)); stroke-width: 2px; }
         
-        /* Barvy podle pohlaví */
+        /* Muži: světle modrá */
         .node-male rect { fill: #ebf5fb; stroke: #3498db; }
         .node-male rect:hover { fill: #d4e6f1; stroke: #2980b9; }
         .node-male text { fill: #1b4f72; }
 
-        .node-female rect { fill: #fdf2e9; stroke: #e59866; }
-        .node-female rect:hover { fill: #fae5d3; stroke: #dc7633; }
-        .node-female text { fill: #78281f; }
+        /* Ženy: čistě jemně růžová */
+        .node-female rect { fill: #fce4ec; stroke: #e91e63; }
+        .node-female rect:hover { fill: #f8bbd0; stroke: #c2185b; }
+        .node-female text { fill: #880e4f; }
 
         .node text { font: 12px sans-serif; pointer-events: none; text-anchor: middle; font-weight: bold; }
         .node-subtext { font: 10px sans-serif; fill: #7f8c8d; pointer-events: none; text-anchor: middle; font-weight: normal; }
@@ -42,7 +43,7 @@
 <body>
 
     <header>
-        <h1>Můj rodokmen – Barevné generace</h1>
+        <h1>Můj rodokmen – Růžová a stíny</h1>
         <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
     </header>
 
