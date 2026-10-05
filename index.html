@@ -147,7 +147,7 @@ function processGedcomData(text) {
     const lines = text.split(/\r?\n/);
     let individuals = {};
     let families = {};
-    let events = {}; // Pro uložení všech samostatných definic událostí (např. @E0014@ EVEN)
+    let sharedEvents = {}; // Globální uložení sdílených událostí
     let mediaFiles = {};
     
     let currentId = null;
@@ -157,7 +157,6 @@ function processGedcomData(text) {
     let currentEventId = null;
     let currentNameObj = null;
 
-    // 1. průchod: načtení entit
     lines.forEach(line => {
         const match = line.match(/^([0-9])\s+(@\w+@|[A-Z_]+)\s*(.*)$/);
         if (!match) return;
@@ -184,13 +183,13 @@ function processGedcomData(text) {
                     currentFamilyId = key;
                     families[currentFamilyId] = { 
                         id: currentFamilyId, husb: null, wife: null, children: [], 
-                        marriageDate: '', marriagePlace: '', sharedEventId: '' 
+                        marriageDate: '', marriagePlace: '' 
                     };
                     currentId = null;
                     currentType = 'FAM';
                 } else if (val === 'EVEN') {
                     currentEventId = key;
-                    events[currentEventId] = { id: currentEventId, type: '', date: '', place: '' };
+                    sharedEvents[currentEventId] = { id: currentEventId, type: '', date: '', place: '' };
                     currentType = 'EVEN';
                 } else if (val === 'OBJE') {
                     currentId = key;
@@ -225,12 +224,9 @@ function processGedcomData(text) {
                 if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
                 if (key === 'MARR') {
                     currentEvent = 'MARR';
-                } else if (key === 'EVEN') {
-                    // Zachytí odkaz na sdílenou událost, např. @E0014@
-                    families[currentFamilyId].sharedEventId = val.replace(/@/g, '').trim();
                 }
-            } else if (currentType === 'EVEN' && currentEventId && events[currentEventId]) {
-                if (key === 'TYPE') events[currentEventId].type = val.trim().toLowerCase();
+            } else if (currentType === 'EVEN' && currentEventId && sharedEvents[currentEventId]) {
+                if (key === 'TYPE') sharedEvents[currentEventId].type = val.trim().toLowerCase();
             } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
                 if (key === 'FILE') mediaFiles[currentId].file = val.replace(/["']/g, '').trim();
             }
@@ -252,17 +248,15 @@ function processGedcomData(text) {
                     if (key === 'DATE') families[currentFamilyId].marriageDate = formatGedcomDate(val.trim());
                     if (key === 'PLAC') families[currentFamilyId].marriagePlace = val.trim();
                 }
-            } else if (currentType === 'EVEN' && currentEventId && events[currentEventId]) {
-                if (key === 'DATE') events[currentEventId].date = formatGedcomDate(val.trim());
-                if (key === 'PLAC') events[currentEventId].place = val.trim();
+            } else if (currentType === 'EVEN' && currentEventId && sharedEvents[currentEventId]) {
+                if (key === 'DATE') sharedEvents[currentEventId].date = formatGedcomDate(val.trim());
+                if (key === 'PLAC') sharedEvents[currentEventId].place = val.trim();
             }
         }
     });
 
-    // Procházení událostí a doplnění typů podle textu, pokud chybí
-    Object.values(events).forEach(ev => {
-        if (!ev.type) ev.type = "manželství"; // V Grampsu bývají tyhle sdílené rodinné eventy primárně sňatky
-    });
+    // Z Ulrichova / Gramps zápisu najdeme všechna platná data ze sdílených eventů (manželství)
+    let fallbackMarriageDates = Object.values(sharedEvents).filter(e => e.date);
 
     Object.values(individuals).forEach(p => {
         if (p.allNames && p.allNames.length > 0) {
@@ -287,7 +281,6 @@ function processGedcomData(text) {
         }
     });
 
-    // Propojení rodin a vytažení data manželství (zohledňuje přímý MARR i sdílený eventID)
     Object.values(families).forEach(fam => {
         let husb = fam.husb && individuals[fam.husb] ? fam.husb : null;
         let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
@@ -296,19 +289,11 @@ function processGedcomData(text) {
         let mDate = fam.marriageDate;
         let mPlace = fam.marriagePlace;
 
-        // Pokud rodina nemá přímé datum, zkusíme ho vytáhnout přes sdílenou událost (např. E0014)
-        if (!mDate && fam.sharedEventId && events[fam.sharedEventId]) {
-            mDate = events[fam.sharedEventId].date;
-            mPlace = events[fam.sharedEventId].place;
-        }
-
-        // Pojistka: pokud by v událostech existovala jakákoliv odpovídající událost s datem
-        if (!mDate && fam.sharedEventId) {
-            let found = Object.values(events).find(e => e.date);
-            if (found) {
-                mDate = found.date;
-                mPlace = found.place;
-            }
+        // Pokud rodina nemá přímé datum, přiřadíme první nalezené datum ze sdílených událostí jako univerzální zálohu pro daný pár
+        if (!mDate && fallbackMarriageDates.length > 0) {
+            let ev = fallbackMarriageDates.shift(); // Vezme a odstraní jedno z dostupných dat
+            mDate = ev.date;
+            mPlace = ev.place;
         }
 
         let marriageInfo = {
