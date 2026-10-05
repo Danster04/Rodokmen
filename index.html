@@ -1,66 +1,4 @@
 /**
- * Hlavní skript pro generování rodokmenu a detailů osob
- */
-
-// Konfigurace a stav aplikace
-const AppState = {
-    selectedPersonId: null,
-    graphData: null
-};
-
-/**
- * Inicializace a vykreslení rodokmenu
- */
-function initFamilyTree(data) {
-    AppState.graphData = data;
-    const container = document.getElementById('family-tree-container');
-    
-    if (!container) {
-        console.error("Chybí kontejner pro graf rodokmenu.");
-        return;
-    }
-
-    // Indikátor načítání
-    showLoading(true);
-
-    try {
-        // Skládání a vykreslení samotného grafu
-        renderGraph(data, container);
-    } catch (error) {
-        console.error("Chyba při skládání grafu:", error);
-    } finally {
-        showLoading(false);
-    }
-}
-
-/**
- * Zobrazení či skrytí stavu načítání
- */
-function showLoading(isLoading) {
-    let loader = document.getElementById('loading-indicator');
-    if (!loader) {
-        loader = document.createElement('div');
-        loader.id = 'loading-indicator';
-        loader.className = 'loading-box';
-        loader.innerText = 'Skládám graf...';
-        document.body.appendChild(loader);
-    }
-    loader.style.display = isLoading ? 'block' : 'none';
-}
-
-/**
- * Vykreslení grafu (struktura generování uzlů)
- */
-function renderGraph(data, container) {
-    container.innerHTML = ''; // Vyčištění plátna
-    
-    // Zde probíhá vykreslování jednotlivých generací a propojení čarami
-    // ... logika pro SVG / DOM uzly ...
-
-    console.log("Graf byl úspěšně sestaven.");
-}
-
-/**
  * Zobrazení detailu konkrétní osoby v bočním panelu
  */
 function showPersonDetails(person) {
@@ -86,7 +24,7 @@ function showPersonDetails(person) {
         </div>
     `;
 
-    // Sekce dětí – opraveno na čistý a správný nadpis "DĚTI"
+    // Sekce dětí – zde je natvrdo vynucen pouze nápis "DĚTI", ignorují se sourozenci i matka
     if (person.children && person.children.length > 0) {
         html += `<div class="detail-section">`;
         html += `<span class="label">DĚTI</span>`;
@@ -110,12 +48,4 @@ function showPersonDetails(person) {
     `;
 
     detailPanel.innerHTML = html;
-}
-
-/**
- * Pomocná funkce pro interakci v grafu
- */
-function focusPerson(personId) {
-    // Vyhledání a centrování osoby v grafu
-    console.log("Přepínám na osobu ID:", personId);
 }
