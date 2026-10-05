@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Můj rodokmen – Generační mřížka</title>
+    <title>Můj rodokmen – Správné rodinné vazby</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -31,13 +31,13 @@
 <body>
 
     <header>
-        <h1>Můj rodokmen – Přehledné generace</h1>
+        <h1>Můj rodokmen – Páry a generace</h1>
         <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
     </header>
 
     <div id="main-container">
         <div id="canvas">
-            <div id="loading">Skládám generace...</div>
+            <div id="loading">Skládám rodinné vazby...</div>
             <svg id="tree-svg" width="100%" height="100%"></svg>
         </div>
         <div id="sidebar">
@@ -108,7 +108,7 @@ function processGedcomData(text) {
                     individuals[currentId] = { 
                         id: currentId, name: 'Neznámý', 
                         birthDate: '', deathDate: '', 
-                        parents: [], children: [], media: [] 
+                        parents: [], children: [], spouses: [], media: [] 
                     };
                     currentFamilyId = null;
                     currentType = 'INDI';
@@ -148,11 +148,18 @@ function processGedcomData(text) {
         }
     });
 
-    // Propojení rodičů a dětí
+    // Zpracování rodin (propojení manželů a dětí)
     Object.values(families).forEach(fam => {
-        let parents = [fam.husb, fam.wife].filter(p => p && individuals[p]);
+        let husb = fam.husb && individuals[fam.husb] ? fam.husb : null;
+        let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
         let kids = fam.children.filter(c => c && individuals[c]);
 
+        if (husb && wife) {
+            if (!individuals[husb].spouses.includes(wife)) individuals[husb].spouses.push(wife);
+            if (!individuals[wife].spouses.includes(husb)) individuals[wife].spouses.push(husb);
+        }
+
+        let parents = [husb, wife].filter(p => p !== null);
         kids.forEach(childId => {
             parents.forEach(parentId => {
                 if (!individuals[childId].parents.includes(parentId)) individuals[childId].parents.push(parentId);
@@ -161,7 +168,7 @@ function processGedcomData(text) {
         });
     });
 
-    // Výpočet generací (levelů) od kořenů
+    // Výpočet generací tak, aby manželé byli garantovaně ve stejné generaci
     let levels = {};
     function assignLevels(personId, currentLevel, visited = new Set()) {
         if (visited.has(personId)) return;
@@ -172,11 +179,29 @@ function processGedcomData(text) {
         }
         
         let person = individuals[personId];
-        if (person && person.children) {
-            person.children.forEach(childId => {
-                assignLevels(childId, currentLevel + 1, new Set(visited));
-            });
-        }
+        if (!person) return;
+
+        // Manželé musí mít stejnou generaci
+        person.spouses.forEach(spouseId => {
+            if (!(spouseId in levels) || currentLevel > levels[spouseId]) {
+                levels[spouseId] = currentLevel;
+            }
+        });
+
+        // Děti jsou o generaci níže
+        person.children.forEach(childId => {
+            assignLevels(childId, currentLevel + 1, new Set(visited));
+        });
+        
+        // Manželé také propagují generaci dětí
+        person.spouses.forEach(spouseId => {
+            let spouse = individuals[spouseId];
+            if (spouse) {
+                spouse.children.forEach(childId => {
+                    assignLevels(childId, currentLevel + 1, new Set(visited));
+                });
+            }
+        });
     }
 
     let roots = Object.values(individuals).filter(p => p.name !== 'Neznámý' && p.parents.length === 0);
@@ -199,8 +224,8 @@ function processGedcomData(text) {
 
     let nodes = [];
     let nodeMap = {};
-    let rowHeight = 120;
-    let colWidth = 170;
+    let rowHeight = 130;
+    let colWidth = 180;
 
     Object.keys(genGroups).sort((a,b) => a - b).forEach(lvl => {
         let personsInGen = genGroups[lvl];
@@ -226,12 +251,15 @@ function processGedcomData(text) {
 
     let links = [];
     Object.values(families).forEach(fam => {
-        let parents = [fam.husb, fam.wife].filter(p => p && nodeMap[p]);
+        let husb = fam.husb && nodeMap[fam.husb] ? fam.husb : null;
+        let wife = fam.wife && nodeMap[fam.wife] ? fam.wife : null;
         let kids = fam.children.filter(c => c && nodeMap[c]);
 
-        if (parents.length === 2) {
-            links.push({ source: nodeMap[parents[0]], target: nodeMap[parents[1]], type: 'partner' });
+        if (husb && wife) {
+            links.push({ source: nodeMap[husb], target: nodeMap[wife], type: 'partner' });
         }
+
+        let parents = [husb, wife].filter(p => p !== null);
         parents.forEach(parent => {
             kids.forEach(child => {
                 links.push({ source: nodeMap[parent], target: nodeMap[child], type: 'parent' });
@@ -260,8 +288,6 @@ function drawStructuredTree(nodes, links) {
         });
 
     svg.call(zoom);
-
-    // Počáteční vycentrování nahoře uprostřed
     svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, 40).scale(0.8));
 
     // Vykreslení čar
@@ -272,10 +298,8 @@ function drawStructuredTree(nodes, links) {
         .attr("class", "link")
         .attr("d", d => {
             if (d.type === 'partner') {
-                // Rovná čára mezi partnery ve stejné generaci
                 return `M ${d.source.x} ${d.source.y} L ${d.target.x} ${d.target.y}`;
             } else {
-                // Pěkná lomová čára od rodičů k dětem
                 let midY = (d.source.y + d.target.y) / 2;
                 return `M ${d.source.x} ${d.source.y} V ${midY} H ${d.target.x} V ${d.target.y}`;
             }
