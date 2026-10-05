@@ -2,19 +2,24 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Můj rodokmen – České měsíce a výrazný stín</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Můj rodokmen – Kompletní a responzivní</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; }
+        header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; flex-shrink: 0; }
         h1 { margin: 0; font-size: 1.4rem; }
-        #main-container { display: flex; flex-grow: 1; height: calc(100vh - 60px); position: relative; }
+        
+        /* Hlavní kontejner – Flexbox pro responzivitu */
+        #main-container { display: flex; flex-direction: row; flex-grow: 1; height: calc(100vh - 60px); position: relative; overflow: hidden; }
+        
         #canvas { flex-grow: 1; background: #fcfcfc; position: relative; overflow: hidden; cursor: grab; }
         #canvas:active { cursor: grabbing; }
-        #sidebar { width: 400px; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; }
+        
+        #sidebar { width: 400px; flex-shrink: 0; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; box-sizing: border-box; }
         #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
         
-        /* Styly pro kartički a znatelně ztmavený stín */
+        /* Kartičky a výrazný měkký stín */
         .node rect { stroke-width: 1.5px; rx: 6px; ry: 6px; cursor: pointer; transition: all 0.2s; filter: drop-shadow(4px 6px 8px rgba(0, 0, 0, 0.35)); }
         .node rect:hover { filter: drop-shadow(5px 8px 12px rgba(0, 0, 0, 0.45)); stroke-width: 2px; }
         
@@ -23,7 +28,7 @@
         .node-male rect:hover { fill: #d4e6f1; stroke: #2980b9; }
         .node-male text { fill: #1b4f72; }
 
-        /* Ženy: čistě jemně růžová */
+        /* Ženy: čistá jemně růžová */
         .node-female rect { fill: #fce4ec; stroke: #e91e63; }
         .node-female rect:hover { fill: #f8bbd0; stroke: #c2185b; }
         .node-female text { fill: #880e4f; }
@@ -38,6 +43,16 @@
         .media-preview { max-width: 100%; border-radius: 6px; border: 1px solid #ddd; margin-top: 5px; }
         video.media-preview { width: 100%; background: #000; }
         .path-warning { font-size: 0.8rem; color: #27ae60; margin-top: 4px; line-height: 1.3; }
+
+        /* ==========================================================
+           RESPONSIVNÍ DESIGN PRO MOBILY A TABLETY (pod 1000px)
+           ========================================================== */
+        @media screen and (max-width: 1000px) {
+            body { height: auto; overflow: auto; }
+            #main-container { flex-direction: column; height: auto; overflow: visible; }
+            #canvas { height: 75vh; width: 100%; min-height: 450px; }
+            #sidebar { width: 100%; border-left: none; border-top: 1px solid #ddd; box-shadow: 0 -2px 5px rgba(0,0,0,0.05); }
+        }
     </style>
 </head>
 <body>
@@ -52,7 +67,7 @@
             <div id="loading">Skládám graf...</div>
             <svg id="tree-svg" width="100%" height="100%"></svg>
         </div>
-        <div id="sidebar">
+        <div id="sidebar" class="detail-panel">
             <h3>Detail osoby</h3>
             <p id="no-selection" style="color: #7f8c8d;">Kliknutím na osobu v grafu zobrazíš její podrobnosti a multimédia.</p>
             <div id="person-details" style="display:none;">
@@ -336,7 +351,13 @@ function drawStructuredTree(nodes, links) {
         .enter().append("g")
         .attr("class", d => `node ${d.sex === 'F' ? 'node-female' : 'node-male'}`)
         .attr("transform", d => `translate(${d.x}, ${d.y})`)
-        .on("click", (event, d) => showDetails(d));
+        .on("click", (event, d) => {
+            showDetails(d);
+            // Na mobilech po kliknutí plynule sroluje k detailu
+            if (window.innerWidth <= 1000) {
+                document.getElementById('sidebar').scrollIntoView({ behavior: 'smooth' });
+            }
+        });
 
     node.append("rect")
         .attr("width", 150)
