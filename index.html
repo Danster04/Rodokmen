@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Můj rodokmen – Kompletní síť</title>
+    <title>Můj rodokmen – Generační mřížka</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
@@ -18,7 +18,7 @@
         .node rect:hover { fill: #ebf5fb; stroke: #2980b9; }
         .node text { font: 12px sans-serif; fill: #2c3e50; pointer-events: none; text-anchor: middle; font-weight: bold; }
         .node-subtext { font: 10px sans-serif; fill: #7f8c8d; pointer-events: none; text-anchor: middle; }
-        .link { stroke: #95a5a6; stroke-width: 1.5px; stroke-opacity: 0.7; }
+        .link { stroke: #95a5a6; stroke-width: 1.5px; fill: none; opacity: 0.7; }
 
         .detail-item { margin-bottom: 15px; }
         .detail-label { font-weight: bold; color: #7f8c8d; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 3px; }
@@ -31,13 +31,13 @@
 <body>
 
     <header>
-        <h1>Můj rodokmen – Kompletní přehled</h1>
+        <h1>Můj rodokmen – Přehledné generace</h1>
         <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
     </header>
 
     <div id="main-container">
         <div id="canvas">
-            <div id="loading">Načítám všechny větve rodokmenu...</div>
+            <div id="loading">Skládám generace...</div>
             <svg id="tree-svg" width="100%" height="100%"></svg>
         </div>
         <div id="sidebar">
@@ -108,7 +108,7 @@ function processGedcomData(text) {
                     individuals[currentId] = { 
                         id: currentId, name: 'Neznámý', 
                         birthDate: '', deathDate: '', 
-                        media: [] 
+                        parents: [], children: [], media: [] 
                     };
                     currentFamilyId = null;
                     currentType = 'INDI';
@@ -148,39 +148,102 @@ function processGedcomData(text) {
         }
     });
 
-    let nodesMap = {};
-    Object.values(individuals).forEach(p => {
-        if (p.name !== 'Neznámý') {
-            let resolvedMedia = p.media.map(mId => {
-                let mediaObj = mediaFiles[mId];
-                return mediaObj ? mediaObj.file : mId;
-            });
-            nodesMap[p.id] = { id: p.id, name: p.name, birth: p.birthDate, death: p.deathDate, media: resolvedMedia };
-        }
-    });
-
-    let links = [];
+    // Propojení rodičů a dětí
     Object.values(families).forEach(fam => {
-        let parents = [fam.husb, fam.wife].filter(p => p && nodesMap[p]);
-        let kids = fam.children.filter(c => c && nodesMap[c]);
+        let parents = [fam.husb, fam.wife].filter(p => p && individuals[p]);
+        let kids = fam.children.filter(c => c && individuals[c]);
 
-        if (parents.length === 2) {
-            links.push({ source: parents[0], target: parents[1], type: 'partner' });
-        }
-        parents.forEach(parent => {
-            kids.forEach(child => {
-                links.push({ source: parent, target: child, type: 'parent' });
+        kids.forEach(childId => {
+            parents.forEach(parentId => {
+                if (!individuals[childId].parents.includes(parentId)) individuals[childId].parents.push(parentId);
+                if (!individuals[parentId].children.includes(childId)) individuals[parentId].children.push(childId);
             });
         });
     });
 
-    let nodes = Object.values(nodesMap);
+    // Výpočet generací (levelů) od kořenů
+    let levels = {};
+    function assignLevels(personId, currentLevel, visited = new Set()) {
+        if (visited.has(personId)) return;
+        visited.add(personId);
+        
+        if (!(personId in levels) || currentLevel > levels[personId]) {
+            levels[personId] = currentLevel;
+        }
+        
+        let person = individuals[personId];
+        if (person && person.children) {
+            person.children.forEach(childId => {
+                assignLevels(childId, currentLevel + 1, new Set(visited));
+            });
+        }
+    }
+
+    let roots = Object.values(individuals).filter(p => p.name !== 'Neznámý' && p.parents.length === 0);
+    if (roots.length === 0) roots = Object.values(individuals).filter(p => p.name !== 'Neznámý');
+
+    roots.forEach(root => assignLevels(root.id, 0));
+
+    Object.values(individuals).forEach(p => {
+        if (p.name !== 'Neznámý' && !(p.id in levels)) levels[p.id] = 0;
+    });
+
+    // Seskupení podle generací
+    let genGroups = {};
+    Object.values(individuals).forEach(p => {
+        if (p.name === 'Neznámý') return;
+        let lvl = levels[p.id] || 0;
+        if (!genGroups[lvl]) genGroups[lvl] = [];
+        genGroups[lvl].push(p);
+    });
+
+    let nodes = [];
+    let nodeMap = {};
+    let rowHeight = 120;
+    let colWidth = 170;
+
+    Object.keys(genGroups).sort((a,b) => a - b).forEach(lvl => {
+        let personsInGen = genGroups[lvl];
+        personsInGen.forEach((p, index) => {
+            let x = (index - personsInGen.length / 2) * colWidth + colWidth / 2;
+            let y = parseInt(lvl) * rowHeight + 60;
+            
+            let resolvedMedia = p.media.map(mId => mediaFiles[mId] ? mediaFiles[mId].file : mId);
+
+            let nodeObj = {
+                id: p.id,
+                name: p.name,
+                birth: p.birthDate,
+                death: p.deathDate,
+                media: resolvedMedia,
+                x: x,
+                y: y
+            };
+            nodes.push(nodeObj);
+            nodeMap[p.id] = nodeObj;
+        });
+    });
+
+    let links = [];
+    Object.values(families).forEach(fam => {
+        let parents = [fam.husb, fam.wife].filter(p => p && nodeMap[p]);
+        let kids = fam.children.filter(c => c && nodeMap[c]);
+
+        if (parents.length === 2) {
+            links.push({ source: nodeMap[parents[0]], target: nodeMap[parents[1]], type: 'partner' });
+        }
+        parents.forEach(parent => {
+            kids.forEach(child => {
+                links.push({ source: nodeMap[parent], target: nodeMap[child], type: 'parent' });
+            });
+        });
+    });
 
     document.getElementById('loading').style.display = 'none';
-    drawNetwork(nodes, links);
+    drawStructuredTree(nodes, links);
 }
 
-function drawNetwork(nodes, links) {
+function drawStructuredTree(nodes, links) {
     const svg = d3.select("#tree-svg");
     const container = document.getElementById('canvas');
     const width = container.clientWidth;
@@ -190,45 +253,43 @@ function drawNetwork(nodes, links) {
 
     const g = svg.append("g");
 
-    svg.call(d3.zoom().scaleExtent([0.1, 4]).on("zoom", (event) => {
-        g.attr("transform", event.transform);
-    }));
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 3])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
 
-    // Síťová simulace s kolizemi, aby se kartičky nepřekrývaly a tvořily přehledný pavučinový graf
-    const simulation = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(links).id(d => d.id).distance(150))
-        .force("charge", d3.forceManyBody().strength(-600))
-        .force("collide", d3.forceCollide().radius(90))
-        .force("center", d3.forceCenter(width / 2, height / 2));
+    svg.call(zoom);
 
+    // Počáteční vycentrování nahoře uprostřed
+    svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, 40).scale(0.8));
+
+    // Vykreslení čar
     const link = g.append("g")
-        .selectAll("line")
+        .selectAll("path")
         .data(links)
-        .enter().append("line")
+        .enter().append("path")
         .attr("class", "link")
+        .attr("d", d => {
+            if (d.type === 'partner') {
+                // Rovná čára mezi partnery ve stejné generaci
+                return `M ${d.source.x} ${d.source.y} L ${d.target.x} ${d.target.y}`;
+            } else {
+                // Pěkná lomová čára od rodičů k dětem
+                let midY = (d.source.y + d.target.y) / 2;
+                return `M ${d.source.x} ${d.source.y} V ${midY} H ${d.target.x} V ${d.target.y}`;
+            }
+        })
         .style("stroke-dasharray", d => d.type === 'partner' ? "4,4" : "none");
 
+    // Vykreslení uzlů
     const node = g.append("g")
         .selectAll("g")
         .data(nodes)
         .enter().append("g")
         .attr("class", "node")
-        .on("click", (event, d) => showDetails(d))
-        .call(d3.drag()
-            .on("start", (event, d) => {
-                if (!event.active) simulation.alphaTarget(0.3).restart();
-                d.fx = d.x;
-                d.fy = d.y;
-            })
-            .on("drag", (event, d) => {
-                d.fx = event.x;
-                d.fy = event.y;
-            })
-            .on("end", (event, d) => {
-                if (!event.active) simulation.alphaTarget(0);
-                d.fx = null;
-                d.fy = null;
-            }));
+        .attr("transform", d => `translate(${d.x}, ${d.y})`)
+        .on("click", (event, d) => showDetails(d));
 
     node.append("rect")
         .attr("width", 150)
@@ -244,17 +305,6 @@ function drawNetwork(nodes, links) {
         .attr("class", "node-subtext")
         .attr("y", 13)
         .text(d => d.birth ? `* ${d.birth}` : "");
-
-    simulation.on("tick", () => {
-        link
-            .attr("x1", d => d.source.x)
-            .attr("y1", d => d.source.y)
-            .attr("x2", d => d.target.x)
-            .attr("y2", d => d.target.y);
-
-        node
-            .attr("transform", d => `translate(${d.x}, ${d.y})`);
-    });
 }
 
 function showDetails(person) {
