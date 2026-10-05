@@ -3,24 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Můj rodokmen - Gramps</title>
+    <title>Můj rodokmen</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; flex-shrink: 0; }
         h1 { margin: 0; font-size: 1.4rem; }
-        .file-upload-btn { background: #3498db; color: white; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; display: inline-block; transition: background 0.2s; }
-        .file-upload-btn:hover { background: #2980b9; }
         
         #main-container { display: flex; flex-direction: row; flex-grow: 1; height: calc(100vh - 60px); position: relative; overflow: hidden; }
+        
         #canvas { flex-grow: 1; background: #fcfcfc; position: relative; overflow: hidden; cursor: grab; }
         #canvas:active { cursor: grabbing; }
         
         #sidebar { width: 400px; flex-shrink: 0; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; box-sizing: border-box; }
-
+        #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
+        
         .node rect { stroke-width: 1.5px; rx: 6px; ry: 6px; cursor: pointer; transition: all 0.2s; filter: drop-shadow(4px 6px 8px rgba(0, 0, 0, 0.35)); }
         .node rect:hover { filter: drop-shadow(5px 8px 12px rgba(0, 0, 0, 0.45)); stroke-width: 2px; }
-
+        
         .node-male rect { fill: #ebf5fb; stroke: #3498db; }
         .node-male rect:hover { fill: #d4e6f1; stroke: #2980b9; }
         .node-male .node-name { fill: #154360; font-weight: bold; font-size: 13px; }
@@ -41,38 +41,45 @@
         video.media-preview { width: 100%; background: #000; }
         .path-warning { font-size: 0.8rem; color: #27ae60; margin-top: 4px; line-height: 1.3; }
 
-        #det-sourozenci ul { list-style: none; padding: 0; margin: 0; }
-        #det-sourozenci li { margin-bottom: 5px; }
-        #det-sourozenci a { color: #3498db; text-decoration: none; cursor: pointer; }
-        #det-sourozenci a:hover { text-decoration: underline; }
-
         #close-modal { display: none; float: right; background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
 
         @media screen and (max-width: 1200px) {
-            #sidebar { display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; width: auto; height: 100vh; z-index: 1000; box-shadow: none; border-left: none; padding: 25px; }
-            #sidebar.active-modal { display: block; }
-            #close-modal { display: block; }
+            #sidebar {
+                display: none;
+                position: fixed;
+                top: 0; right: 0; bottom: 0; left: 0;
+                width: auto;
+                height: 100vh;
+                z-index: 1000;
+                box-shadow: none;
+                border-left: none;
+                padding: 25px;
+            }
+            #sidebar.active-modal {
+                display: block;
+            }
+            #close-modal {
+                display: block;
+            }
         }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Můj rodokmen (Gramps)</h1>
-        <div>
-            <input type="file" id="gedcom-file-input" accept=".ged" style="display: none;">
-            <label for="gedcom-file-input" class="file-upload-btn">📂 Vybrat tvůj soubor dnes.ged</label>
-        </div>
+        <h1>Můj rodokmen</h1>
+        <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
     </header>
 
     <div id="main-container">
         <div id="canvas">
+            <div id="loading">Skládám graf...</div>
             <svg id="tree-svg" width="100%" height="100%"></svg>
         </div>
         <div id="sidebar">
             <button id="close-modal" onclick="closeModal()">✕ Zavřít</button>
             <h3>Detail osoby</h3>
-            <p id="no-selection" style="color: #7f8c8d;">Vyberte nahoře svůj soubor <strong>dnes.ged</strong> a kliknutím na osobu v grafu zobrazíte podrobnosti.</p>
+            <p id="no-selection" style="color: #7f8c8d;">Kliknutím na osobu v grafu zobrazíš její podrobnosti a multimédia.</p>
             <div id="person-details" style="display:none;">
                 <div class="detail-item">
                     <div class="detail-label">Jméno</div>
@@ -94,9 +101,6 @@
                     <div class="detail-label">Úmrtí</div>
                     <div class="detail-value" id="det-death">-</div>
                 </div>
-                
-                <div class="detail-item" id="det-sourozenci" style="display:none;"></div>
-
                 <div class="detail-item" id="media-container" style="display:none;">
                     <div class="detail-label">Multimédia / Videa / Fotky</div>
                     <div id="det-media"></div>
@@ -110,30 +114,13 @@
     </div>
 
 <script>
-let globalIndividuals = {};
-
-document.getElementById('gedcom-file-input').addEventListener('change', function(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(evt) {
-        processGedcomData(evt.target.result);
-    };
-    reader.readAsText(file, 'UTF-8');
-});
-
 function formatGedcomDate(dateStr) {
     if (!dateStr) return "";
     const months = {
-        "JAN": "leden", "FEB": "únor", "MAR": "březen",
+        "JAN": "leden", "FEB": "únor", "MAR": "březen", 
         "APR": "duben", "MAY": "květen", "JUN": "červen", 
         "JUL": "červenec", "AUG": "srpen", "SEP": "září", 
-        "OCT": "říjen", "NOV": "listopad", "DEC": "prosinec",
-        "ledna": "ledna", "února": "února", "března": "března",
-        "dubna": "dubna", "května": "května", "června": "června",
-        "července": "července", "srpna": "srpna", "září": "září",
-        "října": "října", "listopadu": "listopadu", "prosince": "prosince"
+        "OCT": "říjen", "NOV": "listopad", "DEC": "prosinec"
     };
     let formatted = dateStr;
     Object.keys(months).forEach(en => {
@@ -143,16 +130,31 @@ function formatGedcomDate(dateStr) {
     return formatted;
 }
 
+fetch('dnes.ged')
+    .then(response => {
+        if (!response.ok) throw new Error("Nepodařilo se načíst dnes.ged");
+        return response.text();
+    })
+    .then(data => {
+        processGedcomData(data);
+    })
+    .catch(error => {
+        document.getElementById('loading').innerText = "Chyba: " + error.message;
+        document.getElementById('loading').style.color = "red";
+    });
+
 function processGedcomData(text) {
     const lines = text.split(/\r?\n/);
     let individuals = {};
     let families = {};
+    let sharedEvents = {}; 
     let mediaFiles = {};
-
+    
     let currentId = null;
     let currentType = null;
     let currentEvent = null;
     let currentFamilyId = null;
+    let currentEventId = null;
     let currentNameObj = null;
 
     lines.forEach(line => {
@@ -166,12 +168,12 @@ function processGedcomData(text) {
         if (level === 0) {
             currentEvent = null;
             currentNameObj = null;
-
+            currentEventId = null;
             if (key.startsWith('@') && key.endsWith('@')) {
                 if (val === 'INDI') {
                     currentId = key;
                     individuals[currentId] = { 
-                        id: currentId, allNames: [], sex: 'U',
+                        id: currentId, firstName: '', marriedName: '', birthName: '', sex: 'U',
                         birthDate: '', birthPlace: '', deathDate: '', deathPlace: '',
                         occupation: '', marriageDate: '', marriagePlace: '', hasSingleFamily: false, parents: [], children: [], spouses: [], media: [] 
                     };
@@ -181,10 +183,14 @@ function processGedcomData(text) {
                     currentFamilyId = key;
                     families[currentFamilyId] = { 
                         id: currentFamilyId, husb: null, wife: null, children: [], 
-                        marriageDate: '', marriagePlace: '' 
+                        marriageDate: '', marriagePlace: '', sharedEventRef: null 
                     };
                     currentId = null;
                     currentType = 'FAM';
+                } else if (val === 'EVEN') {
+                    currentEventId = key;
+                    sharedEvents[currentEventId] = { id: currentEventId, type: '', date: '', place: '' };
+                    currentType = 'EVEN';
                 } else if (val === 'OBJE') {
                     currentId = key;
                     mediaFiles[currentId] = { id: currentId, file: '' };
@@ -200,27 +206,30 @@ function processGedcomData(text) {
             if (currentType === 'INDI' && currentId && individuals[currentId]) {
                 if (key === 'NAME') {
                     currentNameObj = { fullName: val.replace(/\//g, '').trim(), type: '' };
+                    if (!individuals[currentId].allNames) individuals[currentId].allNames = [];
                     individuals[currentId].allNames.push(currentNameObj);
                 } else if (key === 'SEX') {
-                    individuals[currentId].sex = val.trim();
-                } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU' || key === 'MARR') {
+                    individuals[currentId].sex =
+ val.trim();
+                } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU' || key === 'MARR' || key === 'EVEN') {
                     currentEvent = key;
                     if (key === 'OCCU') {
                         individuals[currentId].occupation = val.trim();
                     }
                 } else if (key === 'OBJE') {
-                    let cleanMedia = val.replace(/@/g, '').trim();
-                    if (cleanMedia.startsWith('O')) {
-                        individuals[currentId].media.push('@' + cleanMedia + '@');
-                    } else if (val.trim()) {
-                        individuals[currentId].media.push(val.trim());
-                    }
+                    individuals[currentId].media.push(val.trim());
                 }
             } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
                 if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
                 if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
                 if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
-                if (key === 'MARR') currentEvent = 'MARR';
+                if (key === 'MARR') {
+                    currentEvent = 'MARR';
+                } else if (key === 'EVEN') {
+                    families[currentFamilyId].sharedEventRef = val.replace(/@/g, '').trim();
+                }
+            } else if (currentType === 'EVEN' && currentEventId && sharedEvents[currentEventId]) {
+                if (key === 'TYPE') sharedEvents[currentEventId].type = val.trim().toLowerCase();
             } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
                 if (key === 'FILE') mediaFiles[currentId].file = val.replace(/["']/g, '').trim();
             }
@@ -237,24 +246,38 @@ function processGedcomData(text) {
                     if (key === 'DATE') individuals[currentId].deathDate = formatGedcomDate(val.trim());
                     if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
                 }
+                if (currentEvent === 'MARR') {
+                    if (key === 'DATE') individuals[currentId].marriageDate = formatGedcomDate(val.trim());
+                    if (key === 'PLAC') individuals[currentId].marriagePlace = val.trim();
+                }
+                if (currentEvent === 'EVEN') {
+                    if (key === 'TYPE' && val.trim().toLowerCase() === 'marriage') {
+                        individuals[currentId].isMarriageEvent = true;
+                    }
+                    if (individuals[currentId].isMarriageEvent) {
+                        if (key === 'DATE') individuals[currentId].marriageDate = formatGedcomDate(val.trim());
+                        if (key === 'PLAC') individuals[currentId].marriagePlace = val.trim();
+                    }
+                }
             } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
                 if (currentEvent === 'MARR') {
                     if (key === 'DATE') families[currentFamilyId].marriageDate = formatGedcomDate(val.trim());
                     if (key === 'PLAC') families[currentFamilyId].marriagePlace = val.trim();
                 }
-            } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
-                if (key === 'FILE') mediaFiles[currentId].file = val.replace(/["']/g, '').trim();
+            } else if (currentType === 'EVEN' && currentEventId && sharedEvents[currentEventId]) {
+                if (key === 'DATE') sharedEvents[currentEventId].date = formatGedcomDate(val.trim());
+                if (key === 'PLAC') sharedEvents[currentEventId].place = val.trim();
             }
         }
     });
 
     Object.values(individuals).forEach(p => {
         if (p.allNames && p.allNames.length > 0) {
-            let married = p.allNames.find(n => n.type.includes('married') || n.type.includes('manžel'));
-            let birth = p.allNames.find(n => n.type.includes('birth') || n.type.includes('rodn'));
+            let married = p.allNames.find(n => n.type.includes('manžel') || n.type.includes('married'));
+            let birth = p.allNames.find(n => n.type.includes('rodn') || n.type.includes('birth'));
 
-            if (!married) married = p.allNames.find(n => !n.type.includes('birth') && !n.type.includes('rodn')) || p.allNames[0];
-            if (!birth) birth = p.allNames.find(n => n.type.includes('birth') || n.type.includes('rodn'));
+            if (!married && p.allNames.length > 0) married = p.allNames[0];
+            if (!birth && p.allNames.length > 1) birth = p.allNames[1];
 
             p.marriedName = married ? married.fullName : p.allNames[0].fullName;
             p.birthName = birth ? birth.fullName : '';
@@ -263,6 +286,7 @@ function processGedcomData(text) {
         }
 
         p.displayName = p.marriedName;
+
         if (p.birthName && p.birthName !== p.marriedName) {
             p.detailName = `${p.marriedName} (roz. ${p.birthName})`;
         } else {
@@ -275,6 +299,7 @@ function processGedcomData(text) {
         let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
         let kids = fam.children.filter(c => c && individuals[c]);
 
+        // Detekce rodiny, kde je pouze jeden rodič (např. svobodná matka)
         if ((husb && !wife) || (!husb && wife)) {
             let singleParentId = husb || wife;
             if (kids.length > 0) {
@@ -282,7 +307,30 @@ function processGedcomData(text) {
             }
         }
 
-        let marriageInfo = { date: fam.marriageDate, place: fam.marriagePlace };
+        let mDate = fam.marriageDate;
+        let mPlace = fam.marriagePlace;
+
+        if (!mDate && husb && individuals[husb].marriageDate) {
+            mDate = individuals[husb].marriageDate;
+            mPlace = individuals[husb].marriagePlace;
+        }
+        if (!mDate && wife && individuals[wife].marriageDate) {
+            mDate = individuals[wife].marriageDate;
+            mPlace = individuals[wife].marriagePlace;
+        }
+
+        if (!mDate && fam.sharedEventRef) {
+            let evKey = '@' + fam.sharedEventRef + '@';
+            if (sharedEvents[evKey] && sharedEvents[evKey].date) {
+                mDate = sharedEvents[evKey].date;
+                mPlace = sharedEvents[evKey].place;
+            }
+        }
+
+        let marriageInfo = {
+            date: mDate,
+            place: mPlace
+        };
 
         if (husb && wife) {
             if (!individuals[husb].spouses.includes(wife)) individuals[husb].spouses.push(wife);
@@ -302,27 +350,6 @@ function processGedcomData(text) {
             });
         });
     });
-
-    let linePersons = new Set();
-    let roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý' && p.parents.length === 0);
-    if (roots.length === 0) roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý');
-
-    function traceMainLine(personId) {
-        if (!personId || linePersons.has(personId)) return;
-        let p = individuals[personId];
-        if (!p) return;
-        linePersons.add(personId);
-        p.spouses.forEach(sId => linePersons.add(sId));
-        p.children.forEach(cId => traceMainLine(cId));
-    }
-
-    if (roots.length > 0) {
-        let mainRoot = roots[0];
-        traceMainLine(mainRoot.id);
-        mainRoot.spouses.forEach(sId => traceMainLine(sId));
-    }
-
-    globalIndividuals = individuals;
 
     let levels = {};
     function assignLevels(personId, currentLevel, visited = new Set()) {
@@ -356,6 +383,9 @@ function processGedcomData(text) {
         });
     }
 
+    let roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý' && p.parents.length === 0);
+    if (roots.length === 0) roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý');
+
     roots.forEach(root => assignLevels(root.id, 0));
 
     Object.values(individuals).forEach(p => {
@@ -365,8 +395,6 @@ function processGedcomData(text) {
     let genGroups = {};
     Object.values(individuals).forEach(p => {
         if (p.marriedName === 'Neznámý') return;
-        if (!linePersons.has(p.id)) return;
-
         let lvl = levels[p.id] || 0;
         if (!genGroups[lvl]) genGroups[lvl] = [];
         genGroups[lvl].push(p);
@@ -377,4 +405,250 @@ function processGedcomData(text) {
     let rowHeight = 145;
     let colWidth = 190;
 
-    Object.keys(
+    Object.keys(genGroups).sort((a,b) => a - b).forEach(lvl => {
+        let personsInGen = genGroups[lvl];
+        
+        let orderedPersons = [];
+        let processed = new Set();
+
+        personsInGen.forEach(p => {
+            if (processed.has(p.id)) return;
+            orderedPersons.push(p);
+            processed.add(p.id);
+
+            let spouseId = p.spouses.find(sId => personsInGen.some(sp => sp.id === sId) && !processed.has(sId));
+            if (spouseId) {
+                let spouse = individuals[spouseId];
+                let first = p;
+                let second = spouse;
+                if (p.sex === 'F' && spouse.sex === 'M') {
+                    first = spouse;
+                    second = p;
+                }
+                orderedPersons[orderedPersons.length - 1] = first;
+                processed.add(first.id);
+                orderedPersons.push(second);
+                processed.add(second.id);
+            }
+        });
+
+        orderedPersons.forEach((p, index) => {
+            let x = (index - orderedPersons.length / 2) * colWidth + colWidth / 2;
+            let y = parseInt(lvl) * rowHeight + 60;
+            
+            let resolvedMedia = p.media.map(mId => mediaFiles[mId] ? mediaFiles[mId].file
+ : mId);
+
+            let nodeObj = {
+                id: p.id,
+                name: p.displayName,
+                detailName: p.detailName,
+                sex: p.sex,
+                birth: p.birthDate,
+                birthPlace: p.birthPlace,
+                death: p.deathDate,
+                deathPlace: p.deathPlace,
+                occupation: p.occupation,
+                marriages: p.marriages || {},
+                spouses: p.spouses,
+                hasSingleFamily: p.hasSingleFamily,
+                media: resolvedMedia,
+                x: x,
+                y: y
+            };
+            nodes.push(nodeObj);
+            nodeMap[p.id] = nodeObj;
+        });
+    });
+
+    let links = [];
+    Object.values(families).forEach(fam => {
+        let husb = fam.husb && nodeMap[fam.husb] ? fam.husb : null;
+        let wife = fam.wife && nodeMap[fam.wife] ? fam.wife : null;
+        let kids = fam.children.filter(c => c && nodeMap[c]);
+
+        if (husb && wife) {
+            links.push({ source: nodeMap[husb], target: nodeMap[wife], type: 'partner' });
+        }
+
+        let parents = [husb, wife].filter(p => p !== null);
+        parents.forEach(parent => {
+            kids.forEach(child => {
+                links.push({ source: nodeMap[parent], target: nodeMap[child], type: 'parent' });
+            });
+        });
+    });
+
+    document.getElementById('loading').style.display = 'none';
+    drawStructuredTree(nodes, links);
+}
+
+function drawStructuredTree(nodes, links) {
+    const svg = d3.select("#tree-svg");
+    const container = document.getElementById('canvas');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    svg.selectAll("*").remove();
+
+    const g = svg.append("g");
+
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 3])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
+
+    svg.call(zoom);
+    svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, 40).scale(0.8));
+
+    const link = g.append("g")
+        .selectAll("path")
+        .data(links)
+        .enter().append("path")
+        .attr("class", "link")
+        .attr("d", d => {
+            if (d.type === 'partner') {
+                return `M ${d.source.x} ${d.source.y} L ${d.target.x} ${d.target.y}`;
+            } else {
+                let midY = (d.source.y + d.target.y) / 2;
+                return `M ${d.source.x} ${d.source.y} V ${midY} H ${d.target.x} V ${d.target.y}`;
+            }
+        })
+        .style("stroke-dasharray", d => d.type === 'partner' ? "4,4" : "none");
+
+    const node = g.append("g")
+        .selectAll("g")
+        .data(nodes)
+        .enter().append("g")
+        .attr("class", d => `node ${d.sex === 'F' ? 'node-female' : 'node-male'}`)
+        .attr("transform", d => `translate(${d.x}, ${d.y})`)
+        .on("click", (event, d) => {
+            showDetails(d);
+            if (window.innerWidth <= 1200) {
+                document.getElementById('sidebar').classList.add('active-modal');
+            }
+        });
+
+    node.append("rect")
+        .attr("width", 170)
+        .attr("height", 62)
+        .attr("x", -85)
+        .attr("y", -31);
+
+    node.append("text")
+        .attr("class", "node-name")
+        .attr("y", -9)
+        .text(d => d.name);
+
+    node.append("text")
+        .attr("class", "node-subtext")
+        .attr("y", 7)
+        .text(d => d.birth ? `* ${d.birth}` : "");
+
+    node.append("text")
+        .attr("class", "node-subtext")
+        .attr("y", 22)
+        .text(d => d.death ? `† ${d.death}` : "");
+}
+
+function showDetails(person) {
+    document.getElementById('no-selection').style.display = 'none';
+    document.getElementById('person-details').style.display = 'block';
+
+    let birthText = person.birth || "Neuvedeno";
+    if (person.birthPlace) birthText += ` (${person.birthPlace})`;
+    document.getElementById('det-birth').innerText = birthText;
+
+    let deathText = person.death || "Neuvedeno";
+    if (person.deathPlace) deathText += ` (${person.deathPlace})`;
+    document.getElementById('det-death').innerText = deathText;
+
+    document.getElementById('det-name').innerText = person.detailName || "Neuvedeno";
+    document.getElementById('det-id').innerText = person.id;
+
+    const occItem = document.getElementById('item-occupation');
+    const occVal = document.getElementById('det-occupation');
+    if (person.occupation) {
+        occVal.innerText = person.occupation;
+        occItem.style.display = 'block';
+    } else {
+        occItem.style.display = 'none';
+    }
+
+    const marItem = document.getElementById('item-marriage');
+    const marLabel = document.getElementById('label-marriage');
+    const marVal = document.getElementById('det-marriage');
+
+    if (person.spouses && person.spouses.length > 0) {
+        marLabel.innerText = "Manželství";
+        let marTexts = [];
+        if (person.marriages) {
+            Object.values(person.marriages).forEach(m => {
+                if (m.date) {
+                    let mStr = m.date;
+                    if (m.place) mStr += ` (${m.place})`;
+                    marTexts.push(mStr);
+                }
+            });
+        }
+        marVal.innerText = marTexts.length > 0 ? marTexts.join('; ') : "Datum neuvedeno";
+        marItem.style.display = 'block';
+    } else if (person.hasSingleFamily) {
+        marLabel.innerText = "Stav / Vztah";
+        marVal.innerText = person.sex === 'F' ? "Svobodná" : "Svobodný";
+        marItem.style.display = 'block';
+    } else {
+        marItem.style.display = 'none';
+    }
+
+    const mediaContainer = document.getElementById('media-container');
+    const mediaDiv = document.getElementById('det-media');
+    mediaDiv.innerHTML = '';
+
+    if (person.media && person.media.length > 0) {
+        mediaContainer.style.display = 'block';
+        person.media.forEach(filePath => {
+            let itemWrapper = document.createElement('div');
+            itemWrapper.style.marginBottom = "12px";
+
+            let fileName = filePath.split('\\').pop().split('/').pop();
+
+            if (filePath.match(/\.(mp4|webm|ogg|mov)$/i)) {
+                let video = document.createElement('video');
+                video.src = fileName; 
+                video.controls = true;
+                video.className = 'media-preview';
+                itemWrapper.appendChild(video);
+
+                let warn = document.createElement('div');
+                warn.className = 'path-warning';
+                warn.innerText = `✓ Video úspěšně spárováno a připraveno k přehrání.`;
+                itemWrapper.appendChild(warn);
+
+            } else if (filePath.match(/\.(jpeg|jpg|png|gif)$/i)) {
+                let img = document.createElement('img');
+                img.src = fileName;
+                img.className = 'media-preview';
+                itemWrapper.appendChild(img);
+            } else {
+                let link = document.createElement('a');
+                link.href = fileName;
+                link.innerText = "Stáhnout / Otevřít: " + fileName;
+                link.target = "_blank";
+                itemWrapper.appendChild(link);
+            }
+            mediaDiv.appendChild(itemWrapper);
+        });
+    } else {
+        mediaContainer.style.display = 'none';
+    }
+}
+
+function closeModal() {
+    document.getElementById('sidebar').classList.remove('active-modal');
+}
+</script>
+
+</body>
+</html>
