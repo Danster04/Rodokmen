@@ -2,30 +2,28 @@
 <html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Můj rodokmen</title>
-    <!-- Načtení knihovny pro vykreslení grafu a GEDCOM parseru -->
+    <title>Můj rodokmen – síťový graf</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/d3-dag@1.1.0/dist/d3-dag.iife.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; }
-        header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; }
         h1 { margin: 0; font-size: 1.4rem; }
-        #canvas { flex-grow: 1; overflow: hidden; background: #ffffff; position: relative; }
+        #canvas { flex-grow: 1; background: #ffffff; position: relative; }
         #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
-        .node rect { fill: #ffffff; stroke: #3498db; stroke-width: 2px; rx: 6px; ry: 6px; }
-        .node text { font: 12px sans-serif; fill: #2c3e50; }
-        .link { fill: none; stroke: #95a5a6; stroke-width: 1.5px; }
+        .node circle { fill: #3498db; stroke: #fff; stroke-width: 2px; cursor: pointer; }
+        .node text { font: 11px sans-serif; fill: #2c3e50; pointer-events: none; text-anchor: middle; dy: -12px; }
+        .link { stroke: #95a5a6; stroke-opacity: 0.6; stroke-width: 1.5px; }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Můj rodokmen – grafické zobrazení</h1>
+        <h1>Můj rodokmen – interaktivní síť</h1>
         <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
     </header>
 
     <div id="canvas">
-        <div id="loading">Načítám a zpracovávám rodokmen...</div>
+        <div id="loading">Načítám data...</div>
         <svg id="tree-svg" width="100%" height="100%"></svg>
     </div>
 
@@ -51,7 +49,6 @@ function processGedcomData(text) {
     let currentType = null;
     let currentFamilyId = null;
 
-    // Základní parsování GEDCOM souboru
     lines.forEach(line => {
         const match = line.match(/^([0-9])\s+(@\w+@|[A-Z_]+)\s*(.*)$/);
         if (!match) return;
@@ -64,7 +61,7 @@ function processGedcomData(text) {
             if (key.startsWith('@') && key.endsWith('@')) {
                 if (val === 'INDI') {
                     currentId = key;
-                    individuals[currentId] = { id: currentId, name: 'Neznámý', children: [], parents: [] };
+                    individuals[currentId] = { id: currentId, name: 'Neznámý' };
                     currentFamilyId = null;
                     currentType = 'INDI';
                 } else if (val === 'FAM') {
@@ -79,15 +76,8 @@ function processGedcomData(text) {
                 }
             }
         } else if (level === 1) {
-            if (currentType === 'INDI') {
-                if (key === 'NAME') {
-                    individuals[currentId].name = val.replace(/\//g, '').trim();
-                } else if (key === 'FAMC') {
-                    individuals[currentId].famc = val.trim();
-                } else if (key === 'FAMS') {
-                    if (!individuals[currentId].fams) individuals[currentId].fams = [];
-                    individuals[currentId].fams.push(val.trim());
-                }
+            if (currentType === 'INDI' && key === 'NAME') {
+                individuals[currentId].name = val.replace(/\//g, '').trim();
             } else if (currentType === 'FAM') {
                 if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
                 if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
@@ -96,37 +86,33 @@ function processGedcomData(text) {
         }
     });
 
-    // Propojení rodinných vazeb
-    let nodes = [];
-    let links = [];
-    let personMap = {};
-
+    let nodesMap = {};
     Object.values(individuals).forEach(p => {
         if (p.name !== 'Neznámý') {
-            personMap[p.id] = p;
-            nodes.push({ id: p.id, name: p.name });
+            nodesMap[p.id] = { id: p.id, name: p.name };
         }
     });
 
-    // Vytvoření hierarchie pro strom
+    let links = [];
     Object.values(families).forEach(fam => {
-        let kids = fam.children;
-        let parents = [fam.husb, fam.wife].filter(p => p && personMap[p]);
-        
-        kids.forEach(childId => {
-            if (personMap[childId]) {
-                parents.forEach(parentId => {
-                    links.push({ source: parentId, target: childId });
-                });
-            }
+        let parents = [fam.husb, fam.wife].filter(p => p && nodesMap[p]);
+        let kids = fam.children.filter(c => nodesMap[c]);
+
+        // Propojení rodičů s dětmi
+        parents.forEach(parent => {
+            kids.forEach(child => {
+                links.push({ source: parent, target: child });
+            });
         });
     });
 
+    let nodes = Object.values(nodesMap);
+
     document.getElementById('loading').style.display = 'none';
-    drawTree(nodes, links);
+    drawNetwork(nodes, links);
 }
 
-function drawTree(nodes, links) {
+function drawNetwork(nodes, links) {
     const svg = d3.select("#tree-svg");
     const width = document.getElementById('canvas').clientWidth;
     const height = document.getElementById('canvas').clientHeight;
@@ -135,66 +121,103 @@ function drawTree(nodes, links) {
 
     const g = svg.append("g");
 
-    // Přidání zoomování a posouvání plátna myší
+    // Zoomování a posouvání myší
     svg.call(d3.zoom().on("zoom", (event) => {
         g.attr("transform", event.transform);
     }));
 
-    // Hierarchické uspořádání stromu
-    const rootId = nodes.length > 0 ? nodes[0].id : null;
-    if (!rootId) return;
+    const simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links).id(d => d.id).distance(80))
+        .force("charge", d3.forceManyBody().strength(-200))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collision", d3.forceCollide().radius(30));
 
-    // Převedení na D3 hierarchii
-    let stratify = d3.stratify()
-        .id(d => d.id)
-        .parentId(d => {
-            let link = links.find(l => l.target === d.id);
-            return link ? link.source : null;
-        });
+    const link = g.append("g")
+        .selectAll("line")
+        .data(links)
+        .enter().append("line")
+        .attr("class", "link");
 
-    // Pokud data tvoří strom, vykreslíme hierarchicky, jinak fallback na seznam uzlů
-    try {
-        let root = stratify(nodes);
-        let treeLayout = d3.tree().nodeSize([120, 80]);
-        treeLayout(root);
+    const node = g.append("g")
+        .selectAll("g")
+        .data(nodes)
+        .enter().append("g")
+        .attr("class", "node")
+        .call(d3.drag()
+            .on("start", dragstarted)
+            .on("drag", dragged)
+            .on("end", dragended));
 
-        // Vykreslení spojnic (čar)
-        g.selectAll(".link")
-            .data(root.links())
-            .enter().append("path")
-            .attr("class", "link")
-            .attr("d", d3.linkVertical()
-                .x(d => d.x + width / 2)
-                .y(d => d.y + 50));
+    node.append("circle")
+        .attr("r.variable", 8)
+        .attr("r", 8);
 
-        // Vykreslení uzlů (boxů lidí)
-        let node = g.selectAll(".node")
-            .data(root.descendants())
-            .enter().append("g")
-            .attr("class", "node")
-            .attr("transform", d => `translate(${d.x + width / 2 - 60}, ${d.y + 30})`);
+    node.append("text")
+        .text(d => d.name)
+        .attr("y", -12);
 
-        node.append("rect")
-            .attr("width", 120)
-            .attr("height", 40);
+    simulation.on("tick", () => {
+        link
+            .attr("x1", d => d.source.x)
+            .attr("y1", d => d.source.y)
+            .attr("x2", d => d.target.x)
+            .attr("y2", d => d.target.y);
 
-        node.append("text")
-            .attr("x", 60)
-            .attr("y", 25)
-            .attr("text-anchor", "middle")
-            .text(d => d.data.name);
+        node
+            .attr("transform", d => `translate(${d.x}, ${d.y})`);
+    });
 
-    } catch (e) {
-        // Fallback, pokud data nejsou čistý strom bez cyklů
-        let simpleBox = svg.append("text")
-            .attr("x", 50)
-            .attr("y", 50)
-            .text("Data obsahují složité vazby. Zobrazeno základní propojení osob.");
-        
-        console.error(e);
+    function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
     }
-}
-</script>
 
-</body>
-</html>
+    function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+    }
+
+    function dragended(event, dAha, koukám, že to spadlo do záchranné větve, protože rodokmeny obsahují manželské svazky a křížení (stromy nejsou čistě jednostranné, ale tvoří síť), takže přísná hierarchická struktura hlásí chybu.
+
+Abychom to vyřešili a vykreslili všechny vazby jako krásnou interaktivní síť, kde můžeš s uzly dokonce hýbat myší, upravíme kód na takzvaný **silový graf (Force Simulation)**. Ten si se složitými rodinnými vazbami poradí bez problémů.
+
+Tady je opravený kód, který vlož do `index.html`:
+
+```html
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Můj rodokmen</title>
+    <script src="[https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js](https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js)"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; }
+        header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { margin: 0; font-size: 1.4rem; }
+        #canvas { flex-grow: 1; overflow: hidden; background: #ffffff; position: relative; }
+        #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
+        .node rect { fill: #ffffff; stroke: #3498db; stroke-width: 2px; rx: 6px; ry: 6px; cursor: pointer; }
+        .node text { font: 12px sans-serif; fill: #2c3e50; pointer-events: none; text-anchor: middle; }
+        .link { stroke: #95a5a6; stroke-width: 1.5px; stroke-opacity: 0.6; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Můj rodokmen – interaktivní síť</h1>
+        <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
+    </header>
+
+    <div id="canvas">
+        <div id="loading">Zpracovávám rodokmen...</div>
+        <svg id="tree-svg" width="100%" height="100%"></svg>
+    </div>
+
+<script>
+fetch('dnes.ged')
+    .then(response => {
+        if (!response.ok) throw new Error("Nepodařilo se načíst dnes.ged");
+        return response.text();
+    })
+    .then(
