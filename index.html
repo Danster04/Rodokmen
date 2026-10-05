@@ -15,7 +15,7 @@
         #canvas:active { cursor: grabbing; }
         
         #sidebar { width: 400px; flex-shrink: 0; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; box-sizing: border-box; }
-        #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
+        #loading { display: none; }
 
         .node rect { stroke-width: 1.5px; rx: 6px; ry: 6px; cursor: pointer; transition: all 0.2s; filter: drop-shadow(4px 6px 8px rgba(0, 0, 0, 0.35)); }
         .node rect:hover { filter: drop-shadow(5px 8px 12px rgba(0, 0, 0, 0.45)); stroke-width: 2px; }
@@ -57,13 +57,12 @@
 <body>
 
     <header>
-        <h1>Můj rodokmen (Gramps Export)</h1>
-        <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
+        <h1>Můj rodokmen (Gramps)</h1>
+        <span>Zdroj: Vloženo přímo ve skriptu</span>
     </header>
 
     <div id="main-container">
         <div id="canvas">
-            <div id="loading">Skládám graf z Gramps dat...</div>
             <svg id="tree-svg" width="100%" height="100%"></svg>
         </div>
         <div id="sidebar">
@@ -109,9 +108,282 @@
 <script>
 let globalIndividuals = {};
 
+const gedcomData = `0 HEAD
+1 SOUR Gramps
+2 VERS AIO64-6.0.8--1
+2 NAME Gramps
+1 DATE 5 OCT 2026
+2 TIME 19:40:25
+1 SUBM @SUBM@
+1 FILE D:\\_TEST\\Untitled_1.ged
+1 COPR Copyright (c) 2026 .
+1 GEDC
+2 VERS 5.5.1
+2 FORM LINEAGE-LINKED
+1 CHAR UTF-8
+1 LANG Czech
+0 @SUBM@ SUBM
+1 NAME
+0 @I0000@ INDI
+1 NAME Bohdan /Štěrba/
+2 TYPE birth
+2 GIVN Bohdan
+2 SURN Štěrba
+1 SEX M
+1 BIRT
+2 DATE 12 APR 1965
+2 PLAC Plzeň
+1 FAMC @F0000@
+2 PEDI birth
+1 CHAN
+2 DATE 4 OCT 2026
+3 TIME 12:10:11
+0 @I0001@ INDI
+1 NAME Věra /Štěrbová/
+2 TYPE married
+2 GIVN Věra
+2 SURN Štěrbová
+1 NAME  /Hrdličková/
+2 TYPE birth
+2 SPFX Hrdličková
+1 SEX F
+1 BIRT
+2 DATE 3 MAR 1946
+2 PLAC Přeštice, Kollárova 654
+1 FAMC @F0001@
+2 PEDI birth
+1 FAMS @F0000@
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 09:24:51
+0 @I0002@ INDI
+1 NAME Věra /Hrdličková/
+2 TYPE birth
+2 GIVN Věra
+2 SURN Hrdličková
+1 SEX F
+1 BIRT
+2 DATE 5 JAN 1926
+2 PLAC Lužany
+1 DEAT
+2 DATE 17.listopadu 2015
+2 PLAC Plzeň
+1 FAMC @F0002@
+2 PEDI birth
+1 FAMS @F0001@
+1 OBJE @O0000@
+1 OBJE
+2 FORM URL
+2 FILE file:///C:/Cesta/K/Vasemu/Videu/Video_Luzany_titulek.mp4
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 17:07:25
+0 @I0003@ INDI
+1 NAME Karolína /Hrdličková/
+2 TYPE married
+2 GIVN Karolína
+2 SURN Hrdličková
+1 NAME  /Kolářová/
+2 TYPE birth
+2 SPFX Kolářová
+1 SEX F
+1 BIRT
+2 DATE 28.listopadu 1904
+2 PLAC Lukoviště
+1 DEAT
+2 DATE 20.listopadu 1988
+2 PLAC Přeštice
+1 FAMS @F0002@
+1 CHAN
+2 DATE 4 OCT 2026
+3 TIME 23:32:11
+0 @I0004@ INDI
+1 NAME Václav /Hrdlička/
+2 TYPE birth
+2 GIVN Václav
+2 SURN Hrdlička
+1 SEX M
+1 BIRT
+2 DATE 7 NOV 1901
+2 PLAC Přeštice čp 87
+1 DEAT
+2 DATE 20 SEP 1971
+1 OCCU Zednický pomocník
+1 EVEN
+2 TYPE Marriage
+2 DATE 10 OCT 1925
+1 FAMC @F0003@
+2 PEDI birth
+1 FAMS @F0002@
+1 OBJE @O0002@
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 17:38:11
+0 @I0005@ INDI
+1 NAME Josef /Hrdlička/
+2 TYPE birth
+2 GIVN Josef
+2 SURN Hrdlička
+1 SEX M
+1 BIRT
+2 DATE 4 JUL 1877
+2 PLAC Přeštice čp 233
+1 OCCU Horník
+1 FAMC @F0004@
+2 _FREL Unknown
+2 _MREL birth
+1 FAMS @F0003@
+1 OBJE @O0003@
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 19:15:38
+0 @I0006@ INDI
+1 NAME Barbora /Hrdličková/
+2 TYPE birth
+2 GIVN Barbora
+2 SURN Hrdličková
+1 SEX F
+1 BIRT
+2 DATE 18 FEB 1839
+2 PLAC Přeštice čp 232
+1 FAMC @F0005@
+2 PEDI birth
+1 FAMS @F0004@
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 18:53:16
+0 @I0007@ INDI
+1 NAME Martin /Hrdlička/
+2 TYPE birth
+2 GIVN Martin
+2 SURN Hrdlička
+1 SEX M
+1 OCCU Podruh
+1 FAMS @F0005@
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 17:44:17
+0 @I0009@ INDI
+1 NAME Marie /Hrdličková/
+2 TYPE married
+2 GIVN Marie
+2 SURN Hrdličková
+1 NAME  /Malá/
+2 TYPE birth
+2 SPFX Malá
+1 SEX F
+1 BIRT
+2 DATE 7 MAR 1881
+2 PLAC Přeštice čp 89
+1 DEAT
+2 DATE 27 FEB 1975
+1 FAMS @F0003@
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 09:32:35
+0 @I0015@ INDI
+1 NAME Alžběta /Hrdličková/
+2 TYPE married
+2 GIVN Alžběta
+2 SURN Hrdličková
+1 NAME  /Samková/
+2 TYPE birth
+2 SPFX Samková
+1 SEX F
+1 FAMS @F0005@
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 18:54:49
+0 @I0016@ INDI
+1 NAME Barbora /Hrdličková/
+2 TYPE birth
+2 GIVN Barbora
+2 SURN Hrdličková
+1 SEX F
+1 BIRT
+2 DATE 9.dubna 1860
+1 FAMC @F0004@
+2 _FREL Unknown
+2 _MREL birth
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 19:33:37
+0 @F0000@ FAM
+1 WIFE @I0001@
+1 CHIL @I0000@
+1 CHAN
+2 DATE 4 OCT 2026
+3 TIME 12:10:11
+0 @F0001@ FAM
+1 WIFE @I0002@
+1 CHIL @I0001@
+1 CHAN
+2 DATE 4 OCT 2026
+3 TIME 12:22:01
+0 @F0002@ FAM
+1 HUSB @I0004@
+1 WIFE @I0003@
+1 MARR
+2 DATE 10.října 1925
+1 CHIL @I0002@
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 17:07:25
+0 @F0003@ FAM
+1 HUSB @I0005@
+1 WIFE @I0009@
+1 MARR
+2 DATE 24.září 1900
+1 CHIL @I0004@
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 17:38:11
+0 @F0004@ FAM
+1 WIFE @I0006@
+1 CHIL @I0005@
+1 CHIL @I0016@
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 19:15:38
+0 @F0005@ FAM
+1 HUSB @I0007@
+1 WIFE @I0015@
+1 CHIL @I0006@
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 18:53:16
+0 @O0000@ OBJE
+1 FILE D:\\RODOKMEN_zdroje\\Věra Hrdličková_1926\\Video_Luzany_titulek.mp4
+2 FORM mp4
+2 TITL Video_Luzany_titulek
+1 CHAN
+2 DATE 4 OCT 2026
+3 TIME 14:56:41
+0 @O0001@ OBJE
+1 FILE D:\\RODOKMEN_zdroje\\Vaclav Hrdlicka\\Vaclav Hrdlicka_titulky_01.mp4
+2 FORM mp4
+2 TITL Vaclav Hrdlicka_titulky_01
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 11:50:29
+0 @O0002@ OBJE
+1 FILE D:\\RODOKMEN_zdroje\\Věra Hrdličková_1926\\Vaclav Hrdlicka_titulky_01.mp4
+2 FORM mp4
+2 TITL Vaclav Hrdlicka_titulky_01
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 12:03:06
+0 @O0003@ OBJE
+1 FILE D:\\RODOKMEN_zdroje\\Věra Hrdličková_1926\\Josef_Hrdlicka_misto narozeni_titulky.mp4
+2 FORM mp4
+2 TITL Josef_Hrdlicka_misto narozeni_titulky
+1 CHAN
+2 DATE 5 OCT 2026
+3 TIME 14:12:18
+0 TRLR`;
+
 function formatGedcomDate(dateStr) {
     if (!dateStr) return "";
-    // Zpracuje české textové formáty z Grampsu (např. 17.listopadu 2015, 9.dubna 1860) nebo anglické zkratky
     const months = {
         "JAN": "leden", "FEB": "únor", "MAR": "březen",
         "APR": "duben", "MAY": "květen", "JUN": "červen", 
@@ -130,18 +402,8 @@ function formatGedcomDate(dateStr) {
     return formatted;
 }
 
-fetch('dnes.ged')
-    .then(response => {
-        if (!response.ok) throw new Error("Nepodařilo se načíst dnes.ged");
-        return response.text();
-    })
-    .then(data => {
-        processGedcomData(data);
-    })
-    .catch(error => {
-        document.getElementById('loading').innerText = "Chyba: " + error.message;
-        document.getElementById('loading').style.color = "red";
-    });
+// Okamžité zpracování dat bez nutnosti fetch
+processGedcomData(gedcomData);
 
 function processGedcomData(text) {
     const lines = text.split(/\r?\n/);
@@ -209,7 +471,6 @@ function processGedcomData(text) {
                         individuals[currentId].occupation = val.trim();
                     }
                 } else if (key === 'OBJE') {
-                    // Gramps může odkazovat na OBJE ID (např. @O0000@) nebo mít přímou cestu
                     let cleanMedia = val.replace(/@/g, '').trim();
                     if (cleanMedia.startsWith('O')) {
                         individuals[currentId].media.push('@' + cleanMedia + '@');
@@ -249,7 +510,6 @@ function processGedcomData(text) {
         }
     });
 
-    // Zpracování jmen z Gramps struktury (upřednostnění rodného / manželského jména)
     Object.values(individuals).forEach(p => {
         if (p.allNames && p.allNames.length > 0) {
             let married = p.allNames.find(n => n.type.includes('married') || n.type.includes('manžel'));
@@ -272,7 +532,6 @@ function processGedcomData(text) {
         }
     });
 
-    // Propojení rodin, manželů a dětí
     Object.values(families).forEach(fam => {
         let husb = fam.husb && individuals[fam.husb] ? fam.husb : null;
         let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
@@ -306,7 +565,6 @@ function processGedcomData(text) {
         });
     });
 
-    // Určení kořenů a hlavní linie stromu
     let linePersons = new Set();
     let roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý' && p.parents.length === 0);
     if (roots.length === 0) roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý');
@@ -328,7 +586,6 @@ function processGedcomData(text) {
 
     globalIndividuals = individuals;
 
-    // Výpočet generací pro vykreslení
     let levels = {};
     function assignLevels(personId, currentLevel, visited = new Set()) {
         if (visited.has(personId)) return;
@@ -412,7 +669,6 @@ function processGedcomData(text) {
             let x = (index - orderedPersons.length / 2) * colWidth + colWidth / 2;
             let y = parseInt(lvl) * rowHeight + 60;
             
-            // Rozbalení multimédií přes OBJE mapu z Grampsu
             let resolvedMedia = p.media.map(mRef => {
                 if (mediaFiles[mRef]) return mediaFiles[mRef].file;
                 return mRef;
@@ -460,7 +716,6 @@ function processGedcomData(text) {
         });
     });
 
-    document.getElementById('loading').style.display = 'none';
     drawStructuredTree(nodes, links);
 }
 
@@ -561,123 +816,4 @@ function renderSidebarDetails(person, allPeople) {
     const marLabel = document.getElementById('label-marriage');
     const marVal = document.getElementById('det-marriage');
 
-    if (person.spouses && person.spouses.length > 0) {
-        marLabel.innerText = "Manželství";
-        let marTexts = [];
-        if (person.marriages) {
-            Object.values(person.marriages).forEach(m => {
-                if (m.date) {
-                    let mStr = m.date;
-                    if (m.place) mStr += ` (${m.place})`;
-                    marTexts.push(mStr);
-                }
-            });
-        }
-        marVal.innerText = marTexts.length > 0 ? marTexts.join('; ') : "Datum neuvedeno";
-        marItem.style.display = 'block';
-    } else if (person.hasSingleFamily) {
-        marLabel.innerText = "Stav / Vztah";
-        marVal.innerText = person.sex === 'F' ? "Svobodná" : "Svobodný";
-        marItem.style.display = 'block';
-    } else {
-        marItem.style.display = 'none';
-    }
-
-    // Sourozenci
-    const sidebarSiblingsContainer = document.getElementById('det-sourozenci');
-    if (sidebarSiblingsContainer) {
-        sidebarSiblingsContainer.innerHTML = '';
-        let siblings = getSiblings(person, allPeople);
-        if (siblings.length > 0) {
-            let heading = document.createElement('div');
-            heading.className = 'detail-label';
-            heading.innerText = "Sourozenci (vedlejší linie)";
-            sidebarSiblingsContainer.appendChild(heading);
-
-            let ul = document.createElement('ul');
-            siblings.forEach(sib => {
-                let li = document.createElement('li');
-                let link = document.createElement('a');
-                link.href = "#";
-                link.innerText = sib.displayName || sib.name;
-                link.onclick = (e) => {
-                    e.preventDefault();
-                    renderSidebarDetails(sib, allPeople);
-                };
-                li.appendChild(link);
-                ul.appendChild(li);
-            });
-            sidebarSiblingsContainer.appendChild(ul);
-            sidebarSiblingsContainer.style.display = 'block';
-        } else {
-            sidebarSiblingsContainer.style.display = 'none';
-        }
-    }
-
-    // Multimédia (zpracování cest k souborům z Grampsu)
-    const mediaContainer = document.getElementById('media-container');
-    const mediaDiv = document.getElementById('det-media');
-    mediaDiv.innerHTML = '';
-
-    let mediaArr = person.media || [];
-    if (mediaArr.length > 0) {
-        mediaContainer.style.display = 'block';
-        mediaArr.forEach(filePath => {
-            let itemWrapper = document.createElement('div');
-            itemWrapper.style.marginBottom = "12px";
-            let fileName = filePath.split('\\').pop().split('/').pop();
-
-            if (filePath.match(/\.(mp4|webm|ogg|mov)$/i)) {
-                let video = document.createElement('video');
-                video.src = fileName; 
-                video.controls = true;
-                video.className = 'media-preview';
-                itemWrapper.appendChild(video);
-
-                let warn = document.createElement('div');
-                warn.className = 'path-warning';
-                warn.innerText = `✓ Video spárováno: ${fileName}`;
-                itemWrapper.appendChild(warn);
-            } else if (filePath.match(/\.(jpeg|jpg|png|gif)$/i)) {
-                let img = document.createElement('img');
-                img.src = fileName;
-                img.className = 'media-preview';
-                itemWrapper.appendChild(img);
-            } else {
-                let link = document.createElement('a');
-                link.href = fileName;
-                link.innerText = "Otevřít soubor: " + fileName;
-                link.target = "_blank";
-                itemWrapper.appendChild(link);
-            }
-            mediaDiv.appendChild(itemWrapper);
-        });
-    } else {
-        mediaContainer.style.display = 'none';
-    }
-}
-
-function getSiblings(person, allPeople) {
-    if (!person.parents || person.parents.length === 0) return [];
-    let siblingsSet = new Set();
-    person.parents.forEach(parentId => {
-        let parent = allPeople.find(p => p.id === parentId);
-        if (parent && parent.children) {
-            parent.children.forEach(childId => {
-                if (childId !== person.id) {
-                    let sib = allPeople.find(p => p.id === childId);
-                    if (sib) siblingsSet.add(sib);
-                }
-            });
-        }
-    });
-    return Array.from(siblingsSet);
-}
-
-function closeModal() {
-    document.getElementById('sidebar').classList.remove('active-modal');
-}
-</script>
-
-</body>
-</html>
+    if (person.spouses && person
