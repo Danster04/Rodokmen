@@ -268,8 +268,8 @@ function processGedcomData(text) {
 
     let nodes = [];
     let nodeMap = {};
-    let rowHeight = 145;
-    let colWidth = 190;
+    let rowHeight = 160;
+    let colWidth = 220;
 
     Object.keys(genGroups).sort((a,b) => a - b).forEach(lvl => {
         let personsInGen = genGroups[lvl];
@@ -299,7 +299,7 @@ function processGedcomData(text) {
 
         orderedPersons.forEach((p, index) => {
             let x = (index - orderedPersons.length / 2) * colWidth + colWidth / 2;
-            let y = parseInt(lvl) * rowHeight + 60;
+            let y = parseInt(lvl) * rowHeight + 80;
             
             let resolvedMedia = p.media.map(mId => mediaFiles[mId] ? mediaFiles[mId].file : mId);
             let resolvedSiblings = p.siblings.map(sId => individuals[sId]).filter(s => s);
@@ -345,6 +345,12 @@ function processGedcomData(text) {
         });
     });
 
-    document.getElementById('loading').style.display = 'none';
-    drawStructuredTree(nodes, links);
+    const loadingEl = document.getElementById('loading');
+    if (loadingEl) loadingEl.style.display = 'none';
+
+    if (typeof drawStructuredTree === 'function') {
+        drawStructuredTree(nodes, links);
+    } else {
+        console.error("Funkce drawStructuredTree není definována!");
+    }
 }
