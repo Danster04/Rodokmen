@@ -132,13 +132,15 @@ function formatGedcomDate(dateStr) {
 
 fetch('dnes.ged')
     .then(response => {
-        if (!response.ok) throw new Error("Nepodařilo se načíst dnes.ged");
+        if (!response.ok) throw new Error("Nepodařilo se načíst dnes.ged (zkontroluj, zda je soubor ve stejné složce)");
         return response.text();
     })
     .then(data => {
+        console.log("GEDCOM soubor úspěšně stažen, začínám parsování...");
         processGedcomData(data);
     })
     .catch(error => {
+        console.error(error);
         document.getElementById('loading').innerText = "Chyba: " + error.message;
         document.getElementById('loading').style.color = "red";
     });
@@ -195,7 +197,7 @@ function processGedcomData(text) {
             }
         } else if (level === 1) {
             currentEvent = null;
-            if (currentType === 'INDI') {
+            if (currentType === 'INDI' && currentId && individuals[currentId]) {
                 if (key === 'NAME') {
                     currentNameObj = { fullName: val.replace(/\//g, '').trim(), type: '' };
                     if (!individuals[currentId].allNames) individuals[currentId].allNames = [];
@@ -210,18 +212,18 @@ function processGedcomData(text) {
                 } else if (key === 'OBJE') {
                     individuals[currentId].media.push(val.trim());
                 }
-            } else if (currentType === 'FAM') {
+            } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
                 if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
                 if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
                 if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
                 if (key === 'MARR') {
                     currentEvent = 'MARR';
                 }
-            } else if (currentType === 'OBJE') {
+            } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
                 if (key === 'FILE') mediaFiles[currentId].file = val.replace(/["']/g, '').trim();
             }
         } else if (level === 2) {
-            if (currentType === 'INDI') {
+            if (currentType === 'INDI' && currentId && individuals[currentId]) {
                 if (currentNameObj && key === 'TYPE') {
                     currentNameObj.type = val.trim().toLowerCase();
                 }
@@ -233,12 +235,7 @@ function processGedcomData(text) {
                     if (key === 'DATE') individuals[currentId].deathDate = formatGedcomDate(val.trim());
                     if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
                 }
-                if (currentEvent === 'OCCU') {
-                    if (key === 'DATE' || key === 'PLAC') {
-                        // Pokud by u povolání byl detail, můžeme případně doplnit
-                    }
-                }
-            } else if (currentType === 'FAM') {
+            } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
                 if (currentEvent === 'MARR') {
                     if (key === 'DATE') families[currentFamilyId].marriageDate = formatGedcomDate(val.trim());
                     if (key === 'PLAC') families[currentFamilyId].marriagePlace = val.trim();
@@ -268,52 +265,3 @@ function processGedcomData(text) {
         } else {
             p.detailName = p.marriedName;
         }
-    });
-
-    // Mapování manželství k jednotlivým osobám pro rychlý přístup v detailu
-    Object.values(families).forEach(fam => {
-        let husb = fam.husb && individuals[fam.husb] ? fam.husb : null;
-        let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
-        let kids = fam.children.filter(c => c && individuals[c]);
-
-        let marriageInfo = {
-            date: fam.marriageDate,
-            place: fam.marriagePlace
-        };
-
-        if (husb && wife) {
-            if (!individuals[husb].spouses.includes(wife)) individuals[husb].spouses.push(wife);
-            if (!individuals[wife].spouses.includes(husb)) individuals[wife].spouses.push(husb);
-            
-            // Uložení údajů o sňatku k oběma manželům
-            if (!individuals[husb].marriages) individuals[husb].marriages = {};
-            if (!individuals[wife].marriages) individuals[wife].marriages = {};
-            individuals[husb].marriages[wife] = marriageInfo;
-            individuals[wife].marriages[husb] = marriageInfo;
-        }
-
-        let parents = [husb, wife].filter(p => p !== null);
-        kids.forEach(childId => {
-            parents.forEach(parentId => {
-                if (!individuals[childId].parents.includes(parentId)) individuals[childId].parents.push(parentId);
-                if (!individuals[parentId].children.includes(childId)) individuals[parentId].children.push(childId);
-            });
-        });
-    });
-
-    let levels = {};
-    function assignLevels(personId, currentLevel, visited = new Set()) {
-        if (visited.has(personId)) return;
-        visited.add(personId);
-        
-        if (!(personId in levels) || currentLevel > levels[personId]) {
-            levels[personId] = currentLevel;
-        }
-        
-        let person = individuals[personId];
-        if (!person) return;
-
-        person.spouses.forEach(spouseId => {
-            if (!(spouseId in levels) || currentLevel > levels[spouseId]) {
-                levels[spouseId] = currentLevel;
-            }
