@@ -23,14 +23,17 @@
         
         .node-male rect { fill: #ebf5fb; stroke: #3498db; }
         .node-male rect:hover { fill: #d4e6f1; stroke: #2980b9; }
-        .node-male text { fill: #1b4f72; }
+        /* Výraznější barva pro jméno muže */
+        .node-male .node-name { fill: #154360; font-weight: bold; font-size: 13px; }
 
         .node-female rect { fill: #fce4ec; stroke: #e91e63; }
         .node-female rect:hover { fill: #f8bbd0; stroke: #c2185b; }
-        .node-female text { fill: #880e4f; }
+        /* Výraznější barva pro jméno ženy */
+        .node-female .node-name { fill: #512e5f; font-weight: bold; font-size: 13px; }
 
-        .node text { font: 12px sans-serif; pointer-events: none; text-anchor: middle; font-weight: bold; }
-        .node-subtext { font: 10px sans-serif; fill: #7f8c8d; pointer-events: none; text-anchor: middle; font-weight: normal; }
+        .node text { font: 12px sans-serif; pointer-events: none; text-anchor: middle; }
+        .node-name { font-size: 13px; font-weight: bold; }
+        .node-subtext { font: 10px sans-serif; fill: #555; pointer-events: none; text-anchor: middle; font-weight: normal; }
         .link { stroke: #bdc3c7; stroke-width: 1.5px; fill: none; opacity: 0.8; }
 
         .detail-item { margin-bottom: 15px; }
@@ -312,8 +315,8 @@ function processGedcomData(text) {
 
     let nodes = [];
     let nodeMap = {};
-    let rowHeight = 145; // Zvětšeno pro rozestupy mezi řadami
-    let colWidth = 190;  // Zvětšeno pro širší obdélníky
+    let rowHeight = 145;
+    let colWidth = 190;
 
     Object.keys(genGroups).sort((a,b) => a - b).forEach(lvl => {
         let personsInGen = genGroups[lvl];
@@ -435,28 +438,28 @@ function drawStructuredTree(nodes, links) {
             }
         });
 
-    // Větší obdélník pro jméno, narození i úmrtí
     node.append("rect")
         .attr("width", 170)
         .attr("height", 62)
         .attr("x", -85)
         .attr("y", -31);
 
-    // Jméno osoby
+    // Výrazné a tučné jméno
     node.append("text")
-        .attr("y", -10)
+        .attr("class", "node-name")
+        .attr("y", -9)
         .text(d => d.name);
 
     // Datum narození
     node.append("text")
         .attr("class", "node-subtext")
-        .attr("y", 6)
+        .attr("y", 7)
         .text(d => d.birth ? `* ${d.birth}` : "");
 
     // Datum úmrtí
     node.append("text")
         .attr("class", "node-subtext")
-        .attr("y", 21)
+        .attr("y", 22)
         .text(d => d.death ? `† ${d.death}` : "");
 }
 
