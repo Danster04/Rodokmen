@@ -94,7 +94,7 @@
                     <div class="detail-value" id="det-occupation">-</div>
                 </div>
                 <div class="detail-item" id="item-marriage">
-                    <div class="detail-label">Manželství</div>
+                    <div class="detail-label" id="label-marriage">Manželství</div>
                     <div class="detail-value" id="det-marriage">Neuvedeno</div>
                 </div>
                 <div class="detail-item">
@@ -175,7 +175,7 @@ function processGedcomData(text) {
                     individuals[currentId] = { 
                         id: currentId, firstName: '', marriedName: '', birthName: '', sex: 'U',
                         birthDate: '', birthPlace: '', deathDate: '', deathPlace: '',
-                        occupation: '', marriageDate: '', marriagePlace: '', parents: [], children: [], spouses: [], media: [] 
+                        occupation: '', marriageDate: '', marriagePlace: '', hasSingleFamily: false, parents: [], children: [], spouses: [], media: [] 
                     };
                     currentFamilyId = null;
                     currentType = 'INDI';
@@ -297,6 +297,14 @@ function processGedcomData(text) {
         let husb = fam.husb && individuals[fam.husb] ? fam.husb : null;
         let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
         let kids = fam.children.filter(c => c && individuals[c]);
+
+        // Detekce rodiny, kde je pouze jeden rodič (např. svobodná matka)
+        if ((husb && !wife) || (!husb && wife)) {
+            let singleParentId = husb || wife;
+            if (kids.length > 0) {
+                individuals[singleParentId].hasSingleFamily = true;
+            }
+        }
 
         let mDate = fam.marriageDate;
         let mPlace = fam.marriagePlace;
@@ -441,6 +449,7 @@ function processGedcomData(text) {
                 occupation: p.occupation,
                 marriages: p.marriages || {},
                 spouses: p.spouses,
+                hasSingleFamily: p.hasSingleFamily,
                 media: resolvedMedia,
                 x: x,
                 y: y
@@ -566,8 +575,11 @@ function showDetails(person) {
     }
 
     const marItem = document.getElementById('item-marriage');
+    const marLabel = document.getElementById('label-marriage');
     const marVal = document.getElementById('det-marriage');
+
     if (person.spouses && person.spouses.length > 0) {
+        marLabel.innerText = "Manželství";
         let marTexts = [];
         if (person.marriages) {
             Object.values(person.marriages).forEach(m => {
@@ -579,6 +591,10 @@ function showDetails(person) {
             });
         }
         marVal.innerText = marTexts.length > 0 ? marTexts.join('; ') : "Datum neuvedeno";
+        marItem.style.display = 'block';
+    } else if (person.hasSingleFamily) {
+        marLabel.innerText = "Stav / Vztah";
+        marVal.innerText = person.sex === 'F' ? "Svobodná" : "Svobodný";
         marItem.style.display = 'block';
     } else {
         marItem.style.display = 'none';
