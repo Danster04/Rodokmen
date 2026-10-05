@@ -219,7 +219,6 @@ function processGedcomData(text) {
         }
     });
 
-    // Zpracování jmen: na kartičce chceme hlavní (manželské) jméno, v detailu obojí
     Object.values(individuals).forEach(p => {
         if (p.allNames && p.allNames.length > 0) {
             let married = p.allNames.find(n => n.type.includes('manžel') || n.type.includes('married'));
@@ -234,10 +233,8 @@ function processGedcomData(text) {
             p.marriedName = 'Neznámý';
         }
 
-        // Čisté jméno pro kartičku ve stromu (zůstane krátké)
         p.displayName = p.marriedName;
 
-        // Rozšířené jméno pro panel vpravo (obsahuje i rodné příjmení)
         if (p.birthName && p.birthName !== p.marriedName) {
             p.detailName = `${p.marriedName} (roz. ${p.birthName})`;
         } else {
@@ -315,8 +312,8 @@ function processGedcomData(text) {
 
     let nodes = [];
     let nodeMap = {};
-    let rowHeight = 130;
-    let colWidth = 180;
+    let rowHeight = 145; // Zvětšeno pro rozestupy mezi řadami
+    let colWidth = 190;  // Zvětšeno pro širší obdélníky
 
     Object.keys(genGroups).sort((a,b) => a - b).forEach(lvl => {
         let personsInGen = genGroups[lvl];
@@ -438,20 +435,29 @@ function drawStructuredTree(nodes, links) {
             }
         });
 
+    // Větší obdélník pro jméno, narození i úmrtí
     node.append("rect")
-        .attr("width", 150)
-        .attr("height", 46)
-        .attr("x", -75)
-        .attr("y", -23);
+        .attr("width", 170)
+        .attr("height", 62)
+        .attr("x", -85)
+        .attr("y", -31);
 
+    // Jméno osoby
     node.append("text")
-        .attr("y", -5)
+        .attr("y", -10)
         .text(d => d.name);
 
+    // Datum narození
     node.append("text")
         .attr("class", "node-subtext")
-        .attr("y", 13)
+        .attr("y", 6)
         .text(d => d.birth ? `* ${d.birth}` : "");
+
+    // Datum úmrtí
+    node.append("text")
+        .attr("class", "node-subtext")
+        .attr("y", 21)
+        .text(d => d.death ? `† ${d.death}` : "");
 }
 
 function showDetails(person) {
@@ -466,7 +472,6 @@ function showDetails(person) {
     if (person.deathPlace) deathText += ` (${person.deathPlace})`;
     document.getElementById('det-death').innerText = deathText;
 
-    // V detailu vpravo ukážeme celé jméno včetně rodného příjmení
     document.getElementById('det-name').innerText = person.detailName || "Neuvedeno";
     document.getElementById('det-id').innerText = person.id;
 
