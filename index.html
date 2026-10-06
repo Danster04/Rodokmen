@@ -18,7 +18,7 @@
         #canvas:active { cursor: grabbing; }
         
         #sidebar { width: 400px; flex-shrink: 0; background: #fff; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; box-shadow: -2px 0 5px rgba(0,0,0,0.05); z-index: 5; box-sizing: border-box; }
-        #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; }
+        #loading { position: absolute; top: 20px; left: 20px; background: #fff; padding: 10px 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); font-weight: bold; color: #e67e22; z-index: 10; max-width: 400px; word-break: break-word; }
         
         .node rect { stroke-width: 1.5px; rx: 6px; ry: 6px; cursor: pointer; transition: all 0.2s; filter: drop-shadow(4px 6px 8px rgba(0, 0, 0, 0.35)); }
         .node rect:hover { filter: drop-shadow(5px 8px 12px rgba(0, 0, 0, 0.45)); stroke-width: 2px; }
@@ -153,7 +153,13 @@ fetch('dnes.ged')
         return response.text();
     })
     .then(data => {
-        processGedcomData(data);
+        try {
+            processGedcomData(data);
+        } catch (err) {
+            document.getElementById('loading').innerText = "Chyba při zpracování dat: " + err.message;
+            document.getElementById('loading').style.color = "#c0392b";
+            console.error(err);
+        }
     })
     .catch(error => {
         document.getElementById('loading').innerText = "Otevřeno z disku. Klikněte nahoře na 'Vybrat soubor dnes.ged'.";
@@ -177,7 +183,8 @@ document.getElementById('gedcom-file-input').addEventListener('change', function
             processGedcomData(event.target.result);
         } catch (err) {
             document.getElementById('loading').innerText = "Chyba při zpracování: " + err.message;
-            document.getElementById('loading').style.color = "red";
+            document.getElementById('loading').style.color = "#c0392b";
+            console.error(err);
         }
     };
     reader.readAsText(file, "UTF-8");
@@ -299,7 +306,6 @@ function processGedcomData(text) {
     });
 
     Object.values(individuals).forEach(p => {
-        // Zde rovnou převedeme ID multimédií na reálné cesty/názvy souborů pro každou osobu
         p.resolvedMedia = p.media.map(mId => mediaFiles[mId] ? mediaFiles[mId].file : mId);
 
         if (p.allNames && p.allNames.length > 0) {
@@ -496,7 +502,7 @@ function processGedcomData(text) {
                 children: p.children,
                 families: p.families,
                 hasSingleFamily: p.hasSingleFamily,
-                media: p.resolvedMedia, // Použijeme rovnou předpřipravená multimédia
+                media: p.resolvedMedia,
                 x: x,
                 y: y
             };
@@ -580,4 +586,21 @@ function drawStructuredTree(nodes, links) {
         .attr("x", -85)
         .attr("y", -31);
 
-    node.append("text
+    node.append("text")
+        .attr("class", "node-name")
+        .attr("y", -9)
+        .text(d => d.name);
+
+    node.append("text")
+        .attr("class", "node-subtext")
+        .attr("y", 7)
+        .text(d => d.birth ? `* ${d.birth}` : "");
+
+    node.append("text")
+        .attr("class", "node-subtext")
+        .attr("y", 22)
+        .text(d => d.death ? `† ${d.death}` : "");
+}
+
+function showDetails(person) {
+    document.getElementById('no-selection').style.display = 'none';
