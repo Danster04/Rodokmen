@@ -9,6 +9,8 @@
         body { font-family: Arial, sans-serif; margin: 0; background: #f0f2f5; color: #333; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         header { background: #2c3e50; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 10; flex-shrink: 0; }
         h1 { margin: 0; font-size: 1.4rem; }
+        .file-loader { background: #34495e; color: white; padding: 6px 12px; border: 1px solid #4e6d8c; border-radius: 4px; cursor: pointer; font-size: 0.9rem; }
+        .file-loader:hover { background: #4e6d8c; }
         
         #main-container { display: flex; flex-direction: row; flex-grow: 1; height: calc(100vh - 60px); position: relative; overflow: hidden; }
         
@@ -71,7 +73,12 @@
 
     <header>
         <h1>Můj rodokmen</h1>
-        <span>Zdroj: <a href="dnes.ged" target="_blank" style="color: #3498db;">dnes.ged</a></span>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <label class="file-loader" id="file-label" style="display:none;">
+                📂 Vybrat soubor dnes.ged <input type="file" id="gedcom-file-input" accept=".ged" style="display:none;">
+            </label>
+            <span id="source-info">Zdroj: dnes.ged</span>
+        </div>
     </header>
 
     <div id="main-container">
@@ -139,18 +146,43 @@ function formatGedcomDate(dateStr) {
     return formatted;
 }
 
+// Pokus o automatické načtení
 fetch('dnes.ged')
     .then(response => {
-        if (!response.ok) throw new Error("Nepodařilo se načíst dnes.ged");
+        if (!response.ok) throw new Error("Nelze načíst přes fetch");
         return response.text();
     })
     .then(data => {
         processGedcomData(data);
     })
     .catch(error => {
-        document.getElementById('loading').innerText = "Chyba: " + error.message;
-        document.getElementById('loading').style.color = "red";
+        // Pokud fetch selže (např. spuštění z disku file://), nabídneme tlačítko pro ruční výběr souboru
+        document.getElementById('loading').innerText = "Otevřeno z disku. Klikněte nahoře na 'Vybrat soubor dnes.ged'.";
+        document.getElementById('loading').style.color = "#c0392b";
+        document.getElementById('file-label').style.display = 'inline-block';
     });
+
+// Posluchač pro ruční výběr souboru
+document.getElementById('gedcom-file-input').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    document.getElementById('loading').innerText = "Skládám graf...";
+    document.getElementById('loading').style.color = "#e67e22";
+    document.getElementById('file-label').style.display = 'none';
+    document.getElementById('source-info').innerText = "Zdroj: " + file.name;
+
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        try {
+            processGedcomData(event.target.result);
+        } catch (err) {
+            document.getElementById('loading').innerText = "Chyba při zpracování: " + err.message;
+            document.getElementById('loading').style.color = "red";
+        }
+    };
+    reader.readAsText(file, "UTF-8");
+});
 
 function processGedcomData(text) {
     const lines = text.split(/\r?\n/);
@@ -380,7 +412,7 @@ function processGedcomData(text) {
     });
 
     let mainLineIds = new Set();
-    let maxLevel = Math.max(...Object.values(levels));
+    let maxLevel = Object.values(levels).length > 0 ? Math.max(...Object.values(levels)) : 0;
     let bottomPersons = Object.values(individuals).filter(p => levels[p.id] === maxLevel);
     
     function traceAncestorsUp(personId) {
@@ -427,4 +459,281 @@ function processGedcomData(text) {
             orderedPersons.push(p);
             processed.add(p.id);
 
-            let spouseId
+            let spouseId = p.spouses.find(sId => personsInGen.some(sp => sp.id === sId) && !processed.has(sId));
+            if (spouseId) {
+                let spouse = individuals[spouseId];
+                let first = p;
+                let second = spouse;
+                if (p.sex === 'F' && spouse.sex === 'M') {
+                    first = spouse;
+                    second = p;
+                }
+                orderedPersons[orderedPersons.length - 1] = first;
+                processed.add(first.id);
+                orderedPersons.push(second);
+                processed.add(second.id);
+            }
+        });
+
+        orderedPersons.forEach((p, index) => {
+            let x = (index - orderedPersons.length / 2) * colWidth + colWidth / 2;
+            let y = parseInt(lvl) * rowHeight + 60;
+            
+            let resolvedMedia = p.media.map(mId => mediaFiles[mId] ? mediaFiles[mId].file : mId);
+
+            let nodeObj = {
+                id: p.id,
+                name: p.displayName,
+                detailName: p.detailName,
+                sex: p.sex,
+                birth: p.birthDate,
+                birthPlace: p.birthPlace,
+                death: p.deathDate,
+                deathPlace: p.deathPlace,
+                occupation: p.occupation,
+                marriages: p.marriages || {},
+                spouses: p.spouses,
+                children: p.children,
+                families: p.families,
+                hasSingleFamily: p.hasSingleFamily,
+                media: resolvedMedia,
+                x: x,
+                y: y
+            };
+            nodes.push(nodeObj);
+            nodeMap[p.id] = nodeObj;
+        });
+    });
+
+    let links = [];
+    Object.values(families).forEach(fam => {
+        let husb = fam.husb && nodeMap[fam.husb] ? fam.husb : null;
+        let wife = fam.wife && nodeMap[fam.wife] ? fam.wife : null;
+        let kids = fam.children.filter(c => c && nodeMap[c]);
+
+        if (husb && wife) {
+            links.push({ source: nodeMap[husb], target: nodeMap[wife], type: 'partner' });
+        }
+
+        let parents = [husb, wife].filter(p => p !== null);
+        parents.forEach(parent => {
+            kids.forEach(child => {
+                links.push({ source: nodeMap[parent], target: nodeMap[child], type: 'parent' });
+            });
+        });
+    });
+
+    document.getElementById('loading').style.display = 'none';
+    drawStructuredTree(nodes, links);
+}
+
+function drawStructuredTree(nodes, links) {
+    const svg = d3.select("#tree-svg");
+    const container = document.getElementById('canvas');
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    svg.selectAll("*").remove();
+
+    const g = svg.append("g");
+
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 3])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        });
+
+    svg.call(zoom);
+    svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, 40).scale(0.8));
+
+    const link = g.append("g")
+        .selectAll("path")
+        .data(links)
+        .enter().append("path")
+        .attr("class", "link")
+        .attr("d", d => {
+            if (d.type === 'partner') {
+                return `M ${d.source.x} ${d.source.y} L ${d.target.x} ${d.target.y}`;
+            } else {
+                let midY = (d.source.y + d.target.y) / 2;
+                return `M ${d.source.x} ${d.source.y} V ${midY} H ${d.target.x} V ${d.target.y}`;
+            }
+        })
+        .style("stroke-dasharray", d => d.type === 'partner' ? "4,4" : "none");
+
+    const node = g.append("g")
+        .selectAll("g")
+        .data(nodes)
+        .enter().append("g")
+        .attr("class", d => `node ${d.sex === 'F' ? 'node-female' : 'node-male'}`)
+        .attr("transform", d => `translate(${d.x}, ${d.y})`)
+        .on("click", (event, d) => {
+            showDetails(d);
+            if (window.innerWidth <= 1200) {
+                document.getElementById('sidebar').classList.add('active-modal');
+            }
+        });
+
+    node.append("rect")
+        .attr("width", 170)
+        .attr("height", 62)
+        .attr("x", -85)
+        .attr("y", -31);
+
+    node.append("text")
+        .attr("class", "node-name")
+        .attr("y", -9)
+        .text(d => d.name);
+
+    node.append("text")
+        .attr("class", "node-subtext")
+        .attr("y", 7)
+        .text(d => d.birth ? `* ${d.birth}` : "");
+
+    node.append("text")
+        .attr("class", "node-subtext")
+        .attr("y", 22)
+        .text(d => d.death ? `† ${d.death}` : "");
+}
+
+function showDetails(person) {
+    document.getElementById('no-selection').style.display = 'none';
+    document.getElementById('person-details').style.display = 'block';
+
+    let birthText = person.birth || "Neuvedeno";
+    if (person.birthPlace) birthText += ` (${person.birthPlace})`;
+    document.getElementById('det-birth').innerText = birthText;
+
+    let deathText = person.death || "Neuvedeno";
+    if (person.deathPlace) deathText += ` (${person.deathPlace})`;
+    document.getElementById('det-death').innerText = deathText;
+
+    document.getElementById('det-name').innerText = person.detailName || "Neuvedeno";
+    document.getElementById('det-id').innerText = person.id;
+
+    const occItem = document.getElementById('item-occupation');
+    const occVal = document.getElementById('det-occupation');
+    if (person.occupation) {
+        occVal.innerText = person.occupation;
+        occItem.style.display = 'block';
+    } else {
+        occItem.style.display = 'none';
+    }
+
+    const marItem = document.getElementById('item-marriage');
+    const marLabel = document.getElementById('label-marriage');
+    const marVal = document.getElementById('det-marriage');
+
+    if (person.spouses && person.spouses.length > 0) {
+        marLabel.innerText = "Manželství";
+        let marTexts = [];
+        if (person.marriages) {
+            Object.values(person.marriages).forEach(m => {
+                if (m.date) {
+                    let mStr = m.date;
+                    if (m.place) mStr += ` (${m.place})`;
+                    marTexts.push(mStr);
+                }
+            });
+        }
+        marVal.innerText = marTexts.length > 0 ? marTexts.join('; ') : "Datum neuvedeno";
+        marItem.style.display = 'block';
+    } else if (person.hasSingleFamily) {
+        marLabel.innerText = "Stav / Vztah";
+        marVal.innerText = person.sex === 'F' ? "Svobodná" : "Svobodný";
+        marItem.style.display = 'block';
+    } else {
+        marItem.style.display = 'none';
+    }
+
+    const childItem = document.getElementById('item-children');
+    const childLabel = document.getElementById('label-children');
+    const childVal = document.getElementById('det-children');
+    childVal.innerHTML = '';
+
+    let allChildrenIds = person.children || [];
+    if (allChildrenIds.length > 0) {
+        childLabel.innerText = "DĚTI";
+        
+        allChildrenIds.forEach(cId => {
+            let childObj = globalIndividuals[cId];
+            if (childObj) {
+                let link = document.createElement('a');
+                link.className = 'sibling-link';
+                let txt = childObj.displayName;
+                if (childObj.birth) txt += ` (* ${childObj.birth})`;
+                link.innerText = txt;
+                link.onclick = () => showDetails({
+                    id: childObj.id,
+                    name: childObj.displayName,
+                    detailName: childObj.detailName,
+                    sex: childObj.sex,
+                    birth: childObj.birthDate,
+                    birthPlace: childObj.birthPlace,
+                    death: childObj.deathDate,
+                    deathPlace: childObj.deathPlace,
+                    occupation: childObj.occupation,
+                    marriages: childObj.marriages || {},
+                    spouses: childObj.spouses,
+                    children: childObj.children,
+                    hasSingleFamily: childObj.hasSingleFamily,
+                    media: childObj.media
+                });
+                childVal.appendChild(link);
+            }
+        });
+        childItem.style.display = 'block';
+    } else {
+        childItem.style.display = 'none';
+    }
+
+    const mediaContainer = document.getElementById('media-container');
+    const mediaDiv = document.getElementById('det-media');
+    mediaDiv.innerHTML = '';
+
+    if (person.media && person.media.length > 0) {
+        mediaContainer.style.display = 'block';
+        person.media.forEach(filePath => {
+            let itemWrapper = document.createElement('div');
+            itemWrapper.style.marginBottom = "12px";
+
+            let fileName = filePath.split('\\').pop().split('/').pop();
+
+            if (filePath.match(/\.(mp4|webm|ogg|mov)$/i)) {
+                let video = document.createElement('video');
+                video.src = fileName; 
+                video.controls = true;
+                video.className = 'media-preview';
+                itemWrapper.appendChild(video);
+
+                let warn = document.createElement('div');
+                warn.className = 'path-warning';
+                warn.innerText = `✓ Video úspěšně spárováno a připraveno k přehrání.`;
+                itemWrapper.appendChild(warn);
+
+            } else if (filePath.match(/\.(jpeg|jpg|png|gif)$/i)) {
+                let img = document.createElement('img');
+                img.src = fileName;
+                img.className = 'media-preview';
+                itemWrapper.appendChild(img);
+            } else {
+                let link = document.createElement('a');
+                link.href = fileName;
+                link.innerText = "Stáhnout / Otevřít: " + fileName;
+                link.target = "_blank";
+                itemWrapper.appendChild(link);
+            }
+            mediaDiv.appendChild(itemWrapper);
+        });
+    } else {
+        mediaContainer.style.display = 'none';
+    }
+}
+
+function closeModal() {
+    document.getElementById('sidebar').classList.remove('active-modal');
+}
+</script>
+
+</body>
+</html>
