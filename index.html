@@ -46,7 +46,7 @@
         video.media-preview { width: 100%; background: #000; cursor: pointer; }
         .path-warning { font-size: 0.75rem; color: #27ae60; margin-top: 4px; line-height: 1.3; }
 
-        /* Lightbox okno */
+        /* Lightbox okno pro fotky i videa */
         #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; flex-direction: column; cursor: zoom-out; }
         #lightbox img { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); object-fit: contain; }
         #lightbox video { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); background: #000; cursor: default; }
@@ -168,7 +168,6 @@ function formatGedcomDate(dateStr) {
     return formatted;
 }
 
-// Automatické načtení souboru dnes.ged ze zdrojů
 fetch('dnes.ged')
     .then(response => {
         if (!response.ok) throw new Error("Nelze načíst soubor dnes.ged");
@@ -758,6 +757,7 @@ function showDetails(person) {
 
             let isVideo = filePath.match(/\.(mp4|webm|ogg|mov)$/i);
             
+            // Kliknutím na nadpis se otevře lightbox (pro fotky i videa)
             titleEl.onclick = () => openLightbox(fileName, displayTitle, isVideo);
             itemBox.appendChild(titleEl);
 
@@ -766,6 +766,7 @@ function showDetails(person) {
                 video.src = fileName; 
                 video.controls = true;
                 video.className = 'media-preview';
+                // Kliknutím na náhled videa se také otevře v lightboxu
                 video.onclick = () => openLightbox(fileName, displayTitle, true);
                 itemBox.appendChild(video);
 
@@ -778,6 +779,7 @@ function showDetails(person) {
                 let img = document.createElement('img');
                 img.src = fileName;
                 img.className = 'media-preview';
+                // Kliknutím na náhled fotky se otevře v lightboxu
                 img.onclick = () => openLightbox(fileName, displayTitle, false);
                 itemBox.appendChild(img);
             }
@@ -813,8 +815,13 @@ function openLightbox(src, captionText, isVideo) {
 
 function closeLightbox() {
     const lightbox = document.getElementById('lightbox');
+    const video = lightbox.querySelector('video');
+    if (video) {
+        video.pause(); // Bezpečně zastaví přehrávání a zruší zvukovou ozvěnu
+    }
     lightbox.style.display = 'none';
-    document.getElementById('lightbox-content-wrapper').innerHTML = '';
+    contentWrapper = document.getElementById('lightbox-content-wrapper');
+    if (contentWrapper) contentWrapper.innerHTML = '';
 }
 
 function closeModal() {
