@@ -48,8 +48,8 @@
 
         /* Lightbox okno */
         #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; flex-direction: column; cursor: zoom-out; }
-        #lightbox img { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); object-fit: contain; }
-        #lightbox video { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); background: #000; cursor: default; }
+        #lightbox img, #lightbox video { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); object-fit: contain; }
+        #lightbox video { background: #000; cursor: default; }
         #lightbox-caption { color: white; margin-top: 15px; font-size: 1.1rem; font-weight: bold; text-align: center; padding: 0 20px; }
 
         .sibling-link { color: #3498db; cursor: pointer; text-decoration: underline; display: block; margin-bottom: 3px; font-size: 0.95rem; }
@@ -135,9 +135,12 @@
         </div>
     </div>
 
-    <!-- Lightbox okno -->
+    <!-- Pevné Lightbox okno se samostatnými elementy -->
     <div id="lightbox" onclick="closeLightbox()">
-        <div id="lightbox-content-wrapper" onclick="event.stopPropagation()"></div>
+        <div id="lightbox-content-wrapper" onclick="event.stopPropagation()" style="display:flex; flex-direction:column; align-items:center;">
+            <img id="lightbox-img" style="display:none;">
+            <video id="lightbox-video" controls autoplay style="display:none;"></video>
+        </div>
         <div id="lightbox-caption"></div>
     </div>
 
@@ -757,12 +760,7 @@ function showDetails(person) {
 
             let isVideo = filePath.match(/\.(mp4|webm|ogg|mov)$/i);
             
-            titleEl.onclick = () => {
-                // Pokud hraje video v panelu, před otevřením ho pozastavíme a umlčíme
-                const sidebarVideo = itemBox.querySelector('video');
-                if (sidebarVideo) { sidebarVideo.pause(); sidebarVideo.currentTime = 0; }
-                openLightbox(fileName, displayTitle, isVideo);
-            };
+            titleEl.onclick = () => openLightbox(fileName, displayTitle, isVideo);
             itemBox.appendChild(titleEl);
 
             if (isVideo) {
@@ -770,11 +768,7 @@ function showDetails(person) {
                 video.src = fileName; 
                 video.controls = true;
                 video.className = 'media-preview';
-                video.onclick = () => {
-                    video.pause();
-                    video.currentTime = 0;
-                    openLightbox(fileName, displayTitle, true);
-                };
+                video.onclick = () => openLightbox(fileName, displayTitle, true);
                 itemBox.appendChild(video);
 
                 let warn = document.createElement('div');
@@ -798,39 +792,43 @@ function showDetails(person) {
 
 function openLightbox(src, captionText, isVideo) {
     const lightbox = document.getElementById('lightbox');
-    const contentWrapper = document.getElementById('lightbox-content-wrapper');
-    const lightboxCaption = document.getElementById('lightbox-caption');
+    const imgEl = document.getElementById('lightbox-img');
+    const videoEl = document.getElementById('lightbox-video');
+    const captionEl = document.getElementById('lightbox-caption');
 
-    contentWrapper.innerHTML = '';
+    // Bezpečně pozastavíme případná videa v panelu, aby nedocházelo k ozvěně
+    document.querySelectorAll('#det-media video').forEach(v => v.pause());
 
     if (isVideo) {
-        let video = document.createElement('video');
-        video.src = src;
-        video.controls = true;
-        video.autoplay = true;
-        contentWrapper.appendChild(video);
+        imgEl.style.display = 'none';
+        imgEl.src = '';
+        videoEl.style.display = 'block';
+        videoEl.src = src;
+        videoEl.play();
     } else {
-        let img = document.createElement('img');
-        img.src = src;
-        contentWrapper.appendChild(img);
+        videoEl.style.display = 'none';
+        videoEl.pause();
+        videoEl.src = '';
+        imgEl.style.display = 'block';
+        imgEl.src = src;
     }
 
-    lightboxCaption.innerText = captionText;
+    captionEl.innerText = captionText;
     lightbox.style.display = 'flex';
 }
 
 function closeLightbox() {
     const lightbox = document.getElementById('lightbox');
-    const video = lightbox.querySelector('video');
-    if (video) {
-        video.pause();
-        video.src = ""; // Zruší načtení a okamžitě utne zvuk i přehrávání
-    }
+    const videoEl = document.getElementById('lightbox-video');
+    const imgEl = document.getElementById('lightbox-img');
+
+    videoEl.pause();
+    videoEl.src = '';
+    videoEl.style.display = 'none';
+    imgEl.style.display = 'none';
+    imgEl.src = '';
+
     lightbox.style.display = 'none';
-    const contentWrapper = document.getElementById('lightbox-content-wrapper');
-    if (contentWrapper) {
-        contentWrapper.innerHTML = '';
-    }
 }
 
 function closeModal() {
