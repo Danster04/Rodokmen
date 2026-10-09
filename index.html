@@ -49,9 +49,9 @@
 
         /* Lightbox (velké okno pro fotky a videa) */
         #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; flex-direction: column; cursor: zoom-out; }
-        #lightbox img { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); object-fit: contain; }
-        #lightbox video { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); background: #000; cursor: zoom-out; }
-        #lightbox-caption { color: white; margin-top: 15px; font-size: 1.1rem; font-weight: bold; text-align: center; padding: 0 20px; }
+        #lightbox img { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); object-fit: contain; cursor: default; }
+        #lightbox video { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); background: #000; cursor: default; }
+        #lightbox-caption { color: white; margin-top: 15px; font-size: 1.1rem; font-weight: bold; text-align: center; padding: 0 20px; pointer-events: none; }
 
         .sibling-link { color: #3498db; cursor: pointer; text-decoration: underline; display: block; margin-bottom: 3px; font-size: 0.95rem; }
         .sibling-link:hover { color: #2980b9; }
@@ -143,8 +143,8 @@
 
     <!-- Lightbox okno pro zvětšení fotek a videí -->
     <div id="lightbox" onclick="closeLightbox()">
-        <img id="lightbox-img" src="" alt="Zvětšená fotka" style="display:none;">
-        <video id="lightbox-video" src="" autoplay style="display:none;"></video>
+        <img id="lightbox-img" src="" alt="Zvětšená fotka" style="display:none;" onclick="event.stopPropagation()">
+        <video id="lightbox-video" src="" controls autoplay style="display:none;" onclick="event.stopPropagation()"></video>
         <div id="lightbox-caption"></div>
     </div>
 
@@ -794,7 +794,6 @@ function showDetails(person) {
                 video.src = fileName; 
                 video.muted = true; // Ztlumíme náhled v panelu, aby nedělal ozvěnu
                 video.className = 'media-preview';
-                // Kliknutím se video zvětší přes celou obrazovku úplně stejně jako fotka
                 video.onclick = () => openVideoLightbox(fileName, displayTitle);
                 itemBox.appendChild(video);
 
@@ -807,7 +806,6 @@ function showDetails(person) {
                 let img = document.createElement('img');
                 img.src = fileName;
                 img.className = 'media-preview';
-                // Kliknutím na PC se obrázek zvětší přes celou obrazovku
                 img.onclick = () => openImageLightbox(fileName, displayTitle);
                 itemBox.appendChild(img);
             }
