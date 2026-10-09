@@ -103,6 +103,11 @@
                     <div class="detail-label">Povolání / Status</div>
                     <div class="detail-value" id="det-occupation">-</div>
                 </div>
+                <!-- Nová položka pro Další bydliště -->
+                <div class="detail-item" id="item-residence" style="display:none;">
+                    <div class="detail-label">Další bydliště</div>
+                    <div class="detail-value" id="det-residence" style="line-height: 1.4;">-</div>
+                </div>
                 <div class="detail-item" id="item-marriage">
                     <div class="detail-label" id="label-marriage">Manželství</div>
                     <div class="detail-value" id="det-marriage">Neuvedeno</div>
@@ -210,6 +215,7 @@ function processGedcomData(text) {
         let currentFamilyId = null;
         let currentEventId = null;
         let currentNameObj = null;
+        let pendingFactValue = null; // Pomocná proměnná pro záchyt FACT atributů
 
         setStatus("Krok 2/6: Parsuji osoby a rodiny...");
         lines.forEach(line => {
@@ -224,13 +230,14 @@ function processGedcomData(text) {
                 currentEvent = null;
                 currentNameObj = null;
                 currentEventId = null;
+                pendingFactValue = null;
                 if (key.startsWith('@') && key.endsWith('@')) {
                     if (val === 'INDI') {
                         currentId = key;
                         individuals[currentId] = { 
                             id: currentId, firstName: '', marriedName: '', birthName: '', sex: 'U',
                             birthDate: '', birthPlace: '', deathDate: '', deathPlace: '',
-                            occupation: '', marriageDate: '', marriagePlace: '', hasSingleFamily: false, parents: [], children: [], spouses: [], media: [], families: [] 
+                            occupation: '', residence: '', marriageDate: '', marriagePlace: '', hasSingleFamily: false, parents: [], children: [], spouses: [], media: [], families: [] 
                         };
                         currentFamilyId = null;
                         currentType = 'INDI';
@@ -270,6 +277,8 @@ function processGedcomData(text) {
                         if (key === 'OCCU') {
                             individuals[currentId].occupation = val.trim();
                         }
+                    } else if (key === 'FACT') {
+                        pendingFactValue = val.trim(); // Uložíme hodnotu a čekáme na řádek TYPE níže
                     } else if (key === 'OBJE') {
                         individuals[currentId].media.push(val.trim());
                     }
@@ -291,6 +300,10 @@ function processGedcomData(text) {
                 if (currentType === 'INDI' && currentId && individuals[currentId]) {
                     if (currentNameObj && key === 'TYPE') {
                         currentNameObj.type = val.trim().toLowerCase();
+                    }
+                    if (key === 'TYPE' && pendingFactValue && val.trim() === 'Další bydliště') {
+                        individuals[currentId].residence = pendingFactValue;
+                        pendingFactValue = null;
                     }
                     if (currentEvent === 'BIRT') {
                         if (key === 'DATE') individuals[currentId].birthDate = formatGedcomDate(val.trim());
@@ -509,6 +522,7 @@ function processGedcomData(text) {
                     death: p.deathDate,
                     deathPlace: p.deathPlace,
                     occupation: p.occupation,
+                    residence: p.residence, // Přenesení dalšího bydliště do uzlu
                     marriages: p.marriages || {},
                     spouses: p.spouses,
                     children: p.children,
@@ -640,6 +654,18 @@ function showDetails(person) {
         occItem.style.display = 'none';
     }
 
+    // Zpracování a zobrazení položky "Další bydliště" rozdělené pod sebe
+    const resItem = document.getElementById('item-residence');
+    const resVal = document.getElementById('det-residence');
+    if (person.residence) {
+        // Rozsekáme adresy podle středníku a poskládáme pod sebe pomocí <br>
+        let adresy = person.residence.split(';').map(a => a.trim()).filter(a => a.length > 0);
+        resVal.innerHTML = adresy.join('<br>');
+        resItem.style.display = 'block';
+    } else {
+        resItem.style.display = 'none';
+    }
+
     const marItem = document.getElementById('item-marriage');
     const marLabel = document.getElementById('label-marriage');
     const marVal = document.getElementById('det-marriage');
@@ -693,6 +719,7 @@ function showDetails(person) {
                     death: childObj.deathDate,
                     deathPlace: childObj.deathPlace,
                     occupation: childObj.occupation,
+                    residence: childObj.residence,
                     marriages: childObj.marriages || {},
                     spouses: childObj.spouses,
                     children: childObj.children,
@@ -748,13 +775,3 @@ function showDetails(person) {
         });
     } else {
         mediaContainer.style.display = 'none';
-    }
-}
-
-function closeModal() {
-    document.getElementById('sidebar').classList.remove('active-modal');
-}
-</script>
-
-</body>
-</html>
