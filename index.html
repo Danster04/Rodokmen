@@ -280,7 +280,6 @@ function processGedcomData(text) {
                     } else if (key === 'FACT') {
                         lastFactValue = val.trim();
                     } else if (key === 'OBJE') {
-                        // Podpora pro přímý odkaz na objekt nebo řetězec v osobě
                         individuals[currentId].media.push(val.trim());
                     }
                 } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
@@ -338,7 +337,6 @@ function processGedcomData(text) {
 
         setStatus("Krok 3/6: Propojuji vazby a jména...");
         Object.values(individuals).forEach(p => {
-            // Převod mediálních odkazů na strukturované objekty obsahující cestu i případný titulek/název z GEDCOMu
             p.resolvedMedia = p.media.map(mRef => {
                 let cleanRef = mRef.replace(/@/g, '').trim();
                 if (mediaFiles['@' + cleanRef + '@']) {
@@ -756,9 +754,14 @@ function showDetails(person) {
     mediaDiv.innerHTML = '';
 
     let personMedia = person.media || [];
-    if (personMedia.length > 0) {
+    // Filtrujeme pouze soubory, které končí na podporované formáty obrázků nebo videí
+    let validMedia = personMedia.filter(mediaObj => {
+        return mediaObj.file.match(/\.(mp4|webm|ogg|mov|jpeg|jpg|png|gif)$/i);
+    });
+
+    if (validMedia.length > 0) {
         mediaContainer.style.display = 'block';
-        personMedia.forEach(mediaObj => {
+        validMedia.forEach(mediaObj => {
             let filePath = mediaObj.file;
             let fileTitle = mediaObj.title;
 
@@ -766,8 +769,6 @@ function showDetails(person) {
             itemBox.className = 'media-item-box';
 
             let fileName = filePath.split('\\').pop().split('/').pop();
-            
-            // Pokud GEDCOM obsahuje TITL, použijeme ho jako nadpis, jinak čistý název souboru
             let displayTitle = fileTitle ? fileTitle : fileName;
 
             let titleEl = document.createElement('div');
@@ -792,12 +793,6 @@ function showDetails(person) {
                 img.src = fileName;
                 img.className = 'media-preview';
                 itemBox.appendChild(img);
-            } else {
-                let link = document.createElement('a');
-                link.href = fileName;
-                link.innerText = "Stáhnout / Otevřít: " + fileName;
-                link.target = "_blank";
-                itemBox.appendChild(link);
             }
             mediaDiv.appendChild(itemBox);
         });
