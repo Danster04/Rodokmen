@@ -50,7 +50,7 @@
         /* Lightbox (velké okno pro fotky a videa) */
         #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); z-index: 2000; justify-content: center; align-items: center; flex-direction: column; cursor: zoom-out; }
         #lightbox img { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); object-fit: contain; }
-        #lightbox video { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); background: #000; cursor: default; }
+        #lightbox video { max-width: 90vw; max-height: 85vh; border-radius: 4px; box-shadow: 0 5px 25px rgba(0,0,0,0.5); background: #000; cursor: zoom-out; }
         #lightbox-caption { color: white; margin-top: 15px; font-size: 1.1rem; font-weight: bold; text-align: center; padding: 0 20px; }
 
         .sibling-link { color: #3498db; cursor: pointer; text-decoration: underline; display: block; margin-bottom: 3px; font-size: 0.95rem; }
@@ -144,7 +144,7 @@
     <!-- Lightbox okno pro zvětšení fotek a videí -->
     <div id="lightbox" onclick="closeLightbox()">
         <img id="lightbox-img" src="" alt="Zvětšená fotka" style="display:none;">
-        <video id="lightbox-video" src="" controls autoplay style="display:none;" onclick="event.stopPropagation()"></video>
+        <video id="lightbox-video" src="" autoplay style="display:none;"></video>
         <div id="lightbox-caption"></div>
     </div>
 
@@ -792,9 +792,9 @@ function showDetails(person) {
             if (filePath.match(/\.(mp4|webm|ogg|mov)$/i)) {
                 let video = document.createElement('video');
                 video.src = fileName; 
-                video.controls = true;
+                video.muted = true; // Ztlumíme náhled v panelu, aby nedělal ozvěnu
                 video.className = 'media-preview';
-                // Kliknutím se video chová stejně jako fotka – otevře se ve zvětšeném lightboxu
+                // Kliknutím se video zvětší přes celou obrazovku úplně stejně jako fotka
                 video.onclick = () => openVideoLightbox(fileName, displayTitle);
                 itemBox.appendChild(video);
 
@@ -856,6 +856,11 @@ function closeLightbox() {
     const lightboxVideo = document.getElementById('lightbox-video');
     lightboxVideo.pause();
     lightboxVideo.src = '';
+    lightboxVideo.style.display = 'none';
+
+    const lightboxImg = document.getElementById('lightbox-img');
+    lightboxImg.style.display = 'none';
+    lightboxImg.src = '';
     
     document.getElementById('lightbox').style.display = 'none';
 }
