@@ -94,7 +94,7 @@
 
     <div id="main-container">
         <div id="canvas">
-            <div id="loading">Inicializace...</div>
+            <div id="loading">Vyberte prosím soubor <strong>dnes.ged</strong> kliknutím na tlačítko v hlavičce nahoře.</div>
             <svg id="tree-svg" width="100%" height="100%"></svg>
         </div>
         <div id="sidebar">
@@ -153,8 +153,9 @@ let globalIndividuals = {};
 
 function setStatus(text, isError = false) {
     const el = document.getElementById('loading');
-    el.innerText = text;
+    el.innerHTML = text;
     el.style.color = isError ? "#c0392b" : "#e67e22";
+    el.style.display = 'block';
     console.log(text);
 }
 
@@ -174,19 +175,6 @@ function formatGedcomDate(dateStr) {
     return formatted;
 }
 
-// Pokus o automatické načtení (funguje na lokálním serveru)
-fetch('dnes.ged')
-    .then(response => {
-        if (!response.ok) throw new Error("Nelze načíst přes fetch");
-        return response.text();
-    })
-    .then(data => {
-        processGedcomData(data);
-    })
-    .catch(error => {
-        setStatus("Vyberte prosím soubor dnes.ged nahoře v hlavičce.", false);
-    });
-
 document.getElementById('gedcom-file-input').addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -199,6 +187,9 @@ document.getElementById('gedcom-file-input').addEventListener('change', function
         processGedcomData(event.target.result);
     };
     reader.readAsText(file, "UTF-8");
+    
+    // Vyčištění inputu, aby šlo znovu vybrat úplně stejný soubor
+    this.value = '';
 });
 
 function processGedcomData(text) {
