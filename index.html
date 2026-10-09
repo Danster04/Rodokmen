@@ -52,7 +52,7 @@
         
         #lightbox-content-box { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; box-sizing: border-box; padding: 0; overflow: hidden; }
         
-        /* Fotka s kurzorem ruky a tažením */
+        /* Fotka s kurzorem ruky pro tažení držením */
         #lightbox img { max-width: 100vw; max-height: 90vh; border-radius: 4px; object-fit: contain; cursor: grab; user-select: none; transform-origin: center center; }
         #lightbox img:active { cursor: grabbing; }
         
@@ -152,8 +152,8 @@
     <!-- Lightbox okno -->
     <div id="lightbox" onclick="handleLightboxClick(event)">
         <div id="lightbox-content-box">
-            <!-- Interaktivní fotka s tažením a zavřením dvojklikem -->
-            <img id="lightbox-img" src="" alt="Zvětšená fotka" style="display:none;" onwheel="handleImageWheel(event)" onmousedown="startImageDrag(event)" onmousemove="imageDrag(event)" onmouseup="endImageDrag()" onmouseleave="endImageDrag()" ondblclick="closeLightbox()">
+            <!-- Interaktivní fotka: tažení držením, dvojklik pro reset, klik pro zavření (řešeno přes skript) -->
+            <img id="lightbox-img" src="" alt="Zvětšená fotka" style="display:none;" onwheel="handleImageWheel(event)" onmousedown="startImageDrag(event)" ondblclick="resetImageZoom(event)" onclick="handleImageClick(event)">
             <video id="lightbox-video" src="" autoplay playsinline webkit-playsinline style="display:none;"></video>
         </div>
         <div id="lightbox-caption"></div>
@@ -167,6 +167,7 @@ let translateY = 0;
 let isDragging = false;
 let startX = 0;
 let startY = 0;
+let hasMoved = false; // Rozpozná, zda šlo o tažení myší nebo pouhé kliknutí
 
 function setStatus(text, isError = false) {
     const el = document.getElementById('loading');
@@ -849,10 +850,16 @@ function handleImageWheel(event) {
 }
 
 function startImageDrag(event) {
-    if (event.button === 0) { // Levá myš
+    if (event.button === 0) { // Pouze levé tlačítko
         isDragging = true;
+        hasMoved = false;
         startX = event.clientX - translateX;
         startY = event.clientY - translateY;
+        
+        // Globální sledování pohybu a puštění myši kdekoli na stránce
+        window.addEventListener('mousemove', imageDrag);
+        window.addEventListener('mouseup', endImageDrag);
+        
         event.stopPropagation();
     }
 }
@@ -860,13 +867,40 @@ function startImageDrag(event) {
 function imageDrag(event) {
     if (!isDragging) return;
     event.preventDefault();
-    translateX = event.clientX - startX;
-    translateY = event.clientY - startY;
+    let newX = event.clientX - startX;
+    let newY = event.clientY - startY;
+    
+    // Pokud se myš pohnula o víc než 3 pixely, považujeme to za tažení (panování)
+    if (Math.abs(newX - translateX) > 2 || Math.abs(newY - translateY) > 2) {
+        hasMoved = true;
+    }
+    
+    translateX = newX;
+    translateY = newY;
     updateImageTransform();
 }
 
 function endImageDrag() {
     isDragging = false;
+    window.removeEventListener('mousemove', imageDrag);
+    window.removeEventListener('mouseup', endImageDrag);
+}
+
+function resetImageZoom(event) {
+    event.stopPropagation();
+    currentScale = 1;
+    translateX = 0;
+    translateY = 0;
+    updateImageTransform();
+}
+
+function handleImageClick(event) {
+    event.stopPropagation();
+    // Pokud šlo o pouhé kliknutí (bez tažení), zavřít lightbox
+    if (!hasMoved) {
+        closeLightbox();
+    }
+    hasMoved = false;
 }
 
 function updateImageTransform() {
@@ -894,6 +928,7 @@ function openImageLightbox(imgSrc, captionText) {
     currentScale = 1;
     translateX = 0;
     translateY = 0;
+    hasMoved = false;
     lightboxImg.style.transform = 'translate(0px, 0px) scale(1)';
 
     lightboxImg.style.display = 'block';
@@ -914,6 +949,7 @@ function openVideoLightbox(videoSrc, captionText) {
     currentScale = 1;
     translateX = 0;
     translateY = 0;
+    hasMoved = false;
 
     lightboxVideo.style.display = 'block';
     lightboxVideo.src = videoSrc;
@@ -936,6 +972,7 @@ function closeLightbox() {
     currentScale = 1;
     translateX = 0;
     translateY = 0;
+    hasMoved = false;
     lightboxImg.style.transform = 'translate(0px, 0px) scale(1)';
     
     document.getElementById('lightbox').style.display = 'none';
