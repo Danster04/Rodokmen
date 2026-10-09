@@ -103,7 +103,6 @@
                     <div class="detail-label">Povolání / Status</div>
                     <div class="detail-value" id="det-occupation">-</div>
                 </div>
-                <!-- Nová položka pro Další bydliště -->
                 <div class="detail-item" id="item-residence" style="display:none;">
                     <div class="detail-label">Další bydliště</div>
                     <div class="detail-value" id="det-residence" style="line-height: 1.4;">-</div>
@@ -215,7 +214,7 @@ function processGedcomData(text) {
         let currentFamilyId = null;
         let currentEventId = null;
         let currentNameObj = null;
-        let pendingFactValue = null; // Pomocná proměnná pro záchyt FACT atributů
+        let lastFactValue = null;
 
         setStatus("Krok 2/6: Parsuji osoby a rodiny...");
         lines.forEach(line => {
@@ -230,7 +229,7 @@ function processGedcomData(text) {
                 currentEvent = null;
                 currentNameObj = null;
                 currentEventId = null;
-                pendingFactValue = null;
+                lastFactValue = null;
                 if (key.startsWith('@') && key.endsWith('@')) {
                     if (val === 'INDI') {
                         currentId = key;
@@ -278,7 +277,7 @@ function processGedcomData(text) {
                             individuals[currentId].occupation = val.trim();
                         }
                     } else if (key === 'FACT') {
-                        pendingFactValue = val.trim(); // Uložíme hodnotu a čekáme na řádek TYPE níže
+                        lastFactValue = val.trim();
                     } else if (key === 'OBJE') {
                         individuals[currentId].media.push(val.trim());
                     }
@@ -301,9 +300,10 @@ function processGedcomData(text) {
                     if (currentNameObj && key === 'TYPE') {
                         currentNameObj.type = val.trim().toLowerCase();
                     }
-                    if (key === 'TYPE' && pendingFactValue && val.trim() === 'Další bydliště') {
-                        individuals[currentId].residence = pendingFactValue;
-                        pendingFactValue = null;
+                    if (key === 'TYPE') {
+                        if (val.trim() === 'Další bydliště' && lastFactValue) {
+                            individuals[currentId].residence = lastFactValue;
+                        }
                     }
                     if (currentEvent === 'BIRT') {
                         if (key === 'DATE') individuals[currentId].birthDate = formatGedcomDate(val.trim());
@@ -522,7 +522,7 @@ function processGedcomData(text) {
                     death: p.deathDate,
                     deathPlace: p.deathPlace,
                     occupation: p.occupation,
-                    residence: p.residence, // Přenesení dalšího bydliště do uzlu
+                    residence: p.residence,
                     marriages: p.marriages || {},
                     spouses: p.spouses,
                     children: p.children,
@@ -654,11 +654,9 @@ function showDetails(person) {
         occItem.style.display = 'none';
     }
 
-    // Zpracování a zobrazení položky "Další bydliště" rozdělené pod sebe
     const resItem = document.getElementById('item-residence');
     const resVal = document.getElementById('det-residence');
     if (person.residence) {
-        // Rozsekáme adresy podle středníku a poskládáme pod sebe pomocí <br>
         let adresy = person.residence.split(';').map(a => a.trim()).filter(a => a.length > 0);
         resVal.innerHTML = adresy.join('<br>');
         resItem.style.display = 'block';
@@ -775,3 +773,13 @@ function showDetails(person) {
         });
     } else {
         mediaContainer.style.display = 'none';
+    }
+}
+
+function closeModal() {
+    document.getElementById('sidebar').classList.remove('active-modal');
+}
+</script>
+
+</body>
+</html>
