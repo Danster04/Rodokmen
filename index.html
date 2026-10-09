@@ -757,7 +757,12 @@ function showDetails(person) {
 
             let isVideo = filePath.match(/\.(mp4|webm|ogg|mov)$/i);
             
-            titleEl.onclick = () => openLightbox(fileName, displayTitle, isVideo);
+            titleEl.onclick = () => {
+                // Pokud hraje video v panelu, před otevřením ho pozastavíme a umlčíme
+                const sidebarVideo = itemBox.querySelector('video');
+                if (sidebarVideo) { sidebarVideo.pause(); sidebarVideo.currentTime = 0; }
+                openLightbox(fileName, displayTitle, isVideo);
+            };
             itemBox.appendChild(titleEl);
 
             if (isVideo) {
@@ -765,7 +770,11 @@ function showDetails(person) {
                 video.src = fileName; 
                 video.controls = true;
                 video.className = 'media-preview';
-                video.onclick = () => openLightbox(fileName, displayTitle, true);
+                video.onclick = () => {
+                    video.pause();
+                    video.currentTime = 0;
+                    openLightbox(fileName, displayTitle, true);
+                };
                 itemBox.appendChild(video);
 
                 let warn = document.createElement('div');
@@ -815,6 +824,7 @@ function closeLightbox() {
     const video = lightbox.querySelector('video');
     if (video) {
         video.pause();
+        video.src = ""; // Zruší načtení a okamžitě utne zvuk i přehrávání
     }
     lightbox.style.display = 'none';
     const contentWrapper = document.getElementById('lightbox-content-wrapper');
