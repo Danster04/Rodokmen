@@ -971,6 +971,15 @@ function closeLightbox() {
     hasMoved = false;
     lightboxImg.style.transform = 'translate(0px, 0px) scale(1)';
     
+    // Pojistka pro okamžitý reset zoomu celé stránky na mobilu při zavření lightboxu
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport) {
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0');
+        setTimeout(() => {
+            viewport.setAttribute('content', 'width=device-width, initial-scale=1.0');
+        }, 50);
+    }
+    
     document.getElementById('lightbox').style.display = 'none';
 }
 
