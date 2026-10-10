@@ -802,13 +802,21 @@ function showDetails(person) {
 
             let titleEl = document.createElement('div');
             titleEl.className = 'media-title';
-            titleEl.innerHTML = `🎬 ${displayTitle}`;
+            
+            // Přesně obarvená SVG ikona pro dokument/fotku ladící s klapkou
+            let docIconSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6c5ce7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><circle cx="10" cy="13" r="2"></circle><path d="m20 17-2.5-2.5L13 19"></path></svg>`;
+
+            if (filePath.match(/\.(mp4|webm|ogg|mov)$/i)) {
+                titleEl.innerHTML = `🎬 ${displayTitle}`;
+            } else {
+                titleEl.innerHTML = `${docIconSvg} ${displayTitle}`;
+            }
             itemBox.appendChild(titleEl);
 
             if (filePath.match(/\.(mp4|webm|ogg|mov)$/i)) {
                 let video = document.createElement('video');
                 video.src = fileName; 
-                video.muted = true; // Ztlumíme náhled v panelu, aby nedělal ozvěnu
+                video.muted = true; 
                 video.className = 'media-preview';
                 video.onclick = () => openVideoLightbox(fileName, displayTitle);
                 itemBox.appendChild(video);
