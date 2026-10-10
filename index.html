@@ -37,7 +37,8 @@
         .link { stroke: #bdc3c7; stroke-width: 1.5px; fill: none; opacity: 0.8; }
 
         .detail-item { margin-bottom: 15px; }
-        .detail-label { font-weight: bold; color: #d47a82; font-size: 0.85rem; text-transform: uppercase; margin-bottom: 3px; }
+        /* Změněno: Černé, tlustší a vizuálně sjednocené s nadpisem */
+        .detail-label { font-weight: 700; color: #111; font-size: 0.92rem; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.3px; }
         .detail-value { font-size: 1.05rem; color: #2c3e50; }
         
         .media-item-box { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 10px; margin-top: 8px; }
@@ -803,7 +804,6 @@ function showDetails(person) {
             let titleEl = document.createElement('div');
             titleEl.className = 'media-title';
             
-            // Přesně obarvená SVG ikona pro dokument/fotku ladící s klapkou
             let docIconSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6c5ce7" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 3px;"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><circle cx="10" cy="13" r="2"></circle><path d="m20 17-2.5-2.5L13 19"></path></svg>`;
 
             if (filePath.match(/\.(mp4|webm|ogg|mov)$/i)) {
