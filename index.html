@@ -62,4 +62,164 @@
         /* Video zachovávající poměr stran bez ořezu a deformace */
         #lightbox video { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; background: #000; border-radius: 4px; cursor: pointer; }
 
-        #lightbox-caption { position: absolute; bottom: 10px; left: 0; width: 100%; color: white; font-size: 0.9rem; font-weight: bold; text-align: center; padding: 0 15px; pointer-events: none; text-shadow: 0 2px 4px rgba(0,0,0,0.8); z-index:
+        #lightbox-caption { position: absolute; bottom: 10px; left: 0; width: 100%; color: white; font-size: 0.9rem; font-weight: bold; text-align: center; padding: 0 15px; pointer-events: none; text-shadow: 0 2px 4px rgba(0,0,0,0.8); z-index: 2005; }
+
+        .sibling-link { color: #3498db; cursor: pointer; text-decoration: underline; display: block; margin-bottom: 3px; font-size: 0.95rem; }
+        .sibling-link:hover { color: #2980b9; }
+
+        #close-modal { display: none; float: right; background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+
+        @media screen and (max-width: 1200px) {
+            #sidebar {
+                display: none;
+                position: fixed;
+                top: 0; right: 0; bottom: 0; left: 0;
+                width: auto;
+                height: 100vh;
+                z-index: 1000;
+                box-shadow: none;
+                border-left: none;
+                padding: 25px;
+            }
+            #sidebar.active-modal {
+                display: block;
+            }
+            #close-modal {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Můj rodokmen</h1>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <label class="file-loader" id="file-label" style="display:none;">
+                📂 Vybrat soubor dnes.ged <input type="file" id="gedcom-file-input" accept=".ged" style="display:none;">
+            </label>
+            <span id="source-info">Zdroj: dnes.ged</span>
+        </div>
+    </header>
+
+    <div id="main-container">
+        <div id="canvas">
+            <div id="loading">Inicializace...</div>
+            <svg id="tree-svg" width="100%" height="100%"></svg>
+        </div>
+        <div id="sidebar">
+            <button id="close-modal" onclick="closeModal()">✕ Zavřít</button>
+            <h3>Detail osoby</h3>
+            <p id="no-selection" style="color: #7f8c8d;">Kliknutím na osobu v grafu zobrazíš její podrobnosti a multimédia.</p>
+            <div id="person-details" style="display:none;">
+                <div class="detail-item">
+                    <div class="detail-label">Jméno</div>
+                    <div class="detail-value" id="det-name">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Narození</div>
+                    <div class="detail-value" id="det-birth">-</div>
+                </div>
+                <div class="detail-item" id="item-occupation" style="display:none;">
+                    <div class="detail-label">Povolání / Status</div>
+                    <div class="detail-value" id="det-occupation">-</div>
+                </div>
+                <div class="detail-item" id="item-residence" style="display:none;">
+                    <div class="detail-label">Další bydliště</div>
+                    <div class="detail-value" id="det-residence" style="line-height: 1.4;">-</div>
+                </div>
+                <div class="detail-item" id="item-marriage">
+                    <div class="detail-label" id="label-marriage">Manželství</div>
+                    <div class="detail-value" id="det-marriage" style="line-height: 1.4;">Neuvedeno</div>
+                </div>
+                <div class="detail-item" id="item-children" style="display:none;">
+                    <div class="detail-label" id="label-children">Děti</div>
+                    <div class="detail-value" id="det-children">-</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">Úmrtí</div>
+                    <div class="detail-value" id="det-death">-</div>
+                </div>
+                <div class="detail-item" id="media-container" style="display:none;">
+                    <div class="detail-label">Multimédia / Videa / Fotky</div>
+                    <div id="det-media"></div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">ID v databázi</div>
+                    <div class="detail-value" id="det-id" style="font-family: monospace; font-size: 0.85rem; color: #95a5a6;">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox okno -->
+    <div id="lightbox" onclick="handleLightboxClick(event)">
+        <div id="lightbox-content-box">
+            <img id="lightbox-img" src="" alt="Zvětšená fotka" style="display:none;" onwheel="handleImageWheel(event)" onmousedown="startImageDrag(event)" ondblclick="resetImageZoom(event)" onclick="handleImageClick(event)">
+            <video id="lightbox-video" src="" autoplay playsinline webkit-playsinline style="display:none;"></video>
+        </div>
+        <div id="lightbox-caption"></div>
+    </div>
+
+<script>
+let globalIndividuals = {};
+let currentScale = 1;
+let translateX = 0;
+let translateY = 0;
+let isDragging = false;
+let startX = 0;
+let startY = 0;
+let hasMoved = false;
+
+function setStatus(text, isError = false) {
+    const el = document.getElementById('loading');
+    el.innerText = text;
+    el.style.color = isError ? "#c0392b" : "#e67e22";
+    console.log(text);
+}
+
+function formatGedcomDate(dateStr) {
+    if (!dateStr) return "";
+    const months = {
+        "JAN": "leden", "FEB": "únor", "MAR": "březen",
+        "APR": "duben", "MAY": "květen", "JUN": "červen",
+        "JUL": "červenec", "AUG": "srpen", "SEP": "září",
+        "OCT": "říjen", "NOV": "listopad", "DEC": "prosinec"
+    };
+    let formatted = dateStr;
+    Object.keys(months).forEach(en => {
+        const regex = new RegExp(en, "gi");
+        formatted = formatted.replace(regex, months[en]);
+    });
+    return formatted;
+}
+
+setStatus("Načítám soubor dnes.ged...");
+fetch('dnes.ged')
+    .then(response => {
+        if (!response.ok) throw new Error("Nelze načíst přes fetch");
+        return response.text();
+    })
+    .then(data => {
+        try {
+            processGedcomData(data);
+        } catch (err) {
+            setStatus("Chyba: " + err.message, true);
+            console.error(err);
+        }
+    })
+    .catch(error => {
+        setStatus("Otevřeno z disku. Klikněte nahoře na 'Vybrat soubor dnes.ged'.", true);
+        document.getElementById('file-label').style.display = 'inline-block';
+    });
+
+document.getElementById('gedcom-file-input').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setStatus("Načítám vybraný soubor...");
+    document.getElementById('file-label').style.display = 'none';
+    document.getElementById('source-info').innerText = "Zdroj: " + file.name;
+
+    const reader = new FileReader();
+    reader.onload = function(
