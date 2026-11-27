@@ -43,6 +43,9 @@
         .detail-item { margin-bottom: 16px; }
         .detail-label { font-weight: 700; color: #111; font-size: 1.02rem; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 0.3px; }
         .detail-value { font-size: 1.05rem; color: #2c3e50; }
+
+        .marriage-entry { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; margin-bottom: 4px; }
+        .marriage-date-group { white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; }
         
         .media-item-box { background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; padding: 10px; margin-top: 8px; }
         .media-title { font-weight: bold; font-size: 0.9rem; color: #2c3e50; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
@@ -171,7 +174,7 @@ let startX = 0;
 let startY = 0;
 let hasMoved = false;
 
-const twinRingsSvg = `<svg width="20" height="12" viewBox="0 0 24 14" fill="none" stroke="#555" stroke-width="1.8" style="vertical-align: -1px; margin: 0 2px;"><circle cx="8.5" cy="7" r="5"></circle><circle cx="15.5" cy="7" r="5"></circle></svg>`;
+const twinRingsSvg = `<svg width="20" height="12" viewBox="0 0 24 14" fill="none" stroke="#555" stroke-width="1.8" style="vertical-align: -1px; margin: 0 2px; flex-shrink: 0;"><circle cx="8.5" cy="7" r="5"></circle><circle cx="15.5" cy="7" r="5"></circle></svg>`;
 
 function setStatus(text, isError = false) {
     const el = document.getElementById('loading');
@@ -747,10 +750,10 @@ function showDetails(person) {
                 detailsPart = "datum neuvedeno";
             }
 
-            marEntries.push(`<strong>${spouseName}</strong> ${twinRingsSvg} ${detailsPart}`);
+            marEntries.push(`<div class="marriage-entry"><strong>${spouseName}</strong><span class="marriage-date-group">${twinRingsSvg}<span>${detailsPart}</span></span></div>`);
         });
 
-        marVal.innerHTML = marEntries.join('<br>');
+        marVal.innerHTML = marEntries.join('');
         marItem.style.display = 'block';
     } else if (person.hasSingleFamily) {
         marLabel.innerText = "Stav / Vztah";
