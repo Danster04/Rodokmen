@@ -52,10 +52,16 @@
 
         /* Lightbox okno */
         #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; width: 100dvw; height: 100dvh; background: rgba(0,0,0,0.98); z-index: 2000; justify-content: center; align-items: center; flex-direction: column; box-sizing: border-box; cursor: pointer; }
+        
         #lightbox-content-box { position: relative; width: 100vw; height: 100vh; width: 100dvw; height: 100dvw; display: flex; justify-content: center; align-items: center; box-sizing: border-box; padding: 30px 10px 40px 10px; overflow: hidden; }
+        
+        /* Interaktivní fotka */
         #lightbox img { max-width: 100vw; max-height: 90vh; border-radius: 4px; object-fit: contain; cursor: grab; user-select: none; transform-origin: center center; }
         #lightbox img:active { cursor: grabbing; }
+        
+        /* Video zachovávající poměr stran bez ořezu a deformace */
         #lightbox video { max-width: 100%; max-height: 100%; width: auto; height: auto; object-fit: contain; background: #000; border-radius: 4px; cursor: pointer; }
+
         #lightbox-caption { position: absolute; bottom: 10px; left: 0; width: 100%; color: white; font-size: 0.9rem; font-weight: bold; text-align: center; padding: 0 15px; pointer-events: none; text-shadow: 0 2px 4px rgba(0,0,0,0.8); z-index: 2005; }
 
         .sibling-link { color: #3498db; cursor: pointer; text-decoration: underline; display: block; margin-bottom: 3px; font-size: 0.95rem; }
@@ -146,6 +152,7 @@
         </div>
     </div>
 
+    <!-- Lightbox okno -->
     <div id="lightbox" onclick="handleLightboxClick(event)">
         <div id="lightbox-content-box">
             <img id="lightbox-img" src="" alt="Zvětšená fotka" style="display:none;" onwheel="handleImageWheel(event)" onmousedown="startImageDrag(event)" ondblclick="resetImageZoom(event)" onclick="handleImageClick(event)">
@@ -170,10 +177,6 @@ function setStatus(text, isError = false) {
     el.style.color = isError ? "#c0392b" : "#e67e22";
     console.log(text);
 }
-
-window.onerror = function(msg, url, line) {
-    setStatus("Chyba skriptu (" + line + "): " + msg, true);
-};
 
 function formatGedcomDate(dateStr) {
     if (!dateStr) return "";
@@ -235,382 +238,377 @@ function processGedcomData(text) {
     const lines = text.split(/\r?\n/);
     
     setTimeout(() => {
-        try {
-            let individuals = {};
-            let families = {};
-            let sharedEvents = {}; 
-            let mediaFiles = {};
-            
-            let currentId = null;
-            let currentType = null;
-            let currentEvent = null;
-            let currentFamilyId = null;
-            let currentEventId = null;
-            let currentNameObj = null;
-            let lastFactValue = null;
+        let individuals = {};
+        let families = {};
+        let sharedEvents = {}; 
+        let mediaFiles = {};
+        
+        let currentId = null;
+        let currentType = null;
+        let currentEvent = null;
+        let currentFamilyId = null;
+        let currentEventId = null;
+        let currentNameObj = null;
+        let lastFactValue = null;
 
-            setStatus("Krok 2/6: Parsuji osoby a rodiny...");
-            lines.forEach(line => {
-                const match = line.match(/^([0-9])\s+(@\w+@|[A-Z_]+)\s*(.*)$/);
-                if (!match) return;
+        setStatus("Krok 2/6: Parsuji osoby a rodiny...");
+        lines.forEach(line => {
+            const match = line.match(/^([0-9])\s+(@\w+@|[A-Z_]+)\s*(.*)$/);
+            if (!match) return;
 
-                const level = parseInt(match[1]);
-                const key = match[2];
-                const val = match[3];
+            const level = parseInt(match[1]);
+            const key = match[2];
+            const val = match[3];
 
-                if (level === 0) {
-                    currentEvent = null;
-                    currentNameObj = null;
-                    currentEventId = null;
-                    lastFactValue = null;
-                    if (key.startsWith('@') && key.endsWith('@')) {
-                        if (val === 'INDI') {
-                            currentId = key;
-                            individuals[currentId] = { 
-                                id: currentId, firstName: '', marriedName: '', birthName: '', sex: 'U',
-                                birthDate: '', birthPlace: '', deathDate: '', deathPlace: '',
-                                occupation: '', residence: '', marriageDate: '', marriagePlace: '', hasSingleFamily: false, parents: [], children: [], spouses: [], media: [], families: [] 
-                            };
-                            currentFamilyId = null;
-                            currentType = 'INDI';
-                        } else if (val === 'FAM') {
-                            currentFamilyId = key;
-                            families[currentFamilyId] = { 
-                                id: currentFamilyId, husb: null, wife: null, children: [], 
-                                marriageDate: '', marriagePlace: '', sharedEventRef: null 
-                            };
-                            currentId = null;
-                            currentType = 'FAM';
-                        } else if (val === 'EVEN') {
-                            currentEventId = key;
-                            sharedEvents[currentEventId] = { id: currentEventId, type: '', date: '', place: '' };
-                            currentType = 'EVEN';
-                        } else if (val === 'OBJE') {
-                            currentId = key;
-                            mediaFiles[currentId] = { id: currentId, file: '', title: '' };
-                            currentType = 'OBJE';
-                        } else {
-                            currentId = null;
-                            currentFamilyId = null;
-                            currentType = null;
-                        }
-                    }
-                } else if (level === 1) {
-                    currentEvent = null;
-                    if (currentType === 'INDI' && currentId && individuals[currentId]) {
-                        if (key === 'NAME') {
-                            currentNameObj = { fullName: val.replace(/\//g, '').trim(), type: '' };
-                            if (!individuals[currentId].allNames) individuals[currentId].allNames = [];
-                            individuals[currentId].allNames.push(currentNameObj);
-                        } else if (key === 'SEX') {
-                            individuals[currentId].sex = val.trim();
-                        } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU' || key === 'MARR' || key === 'EVEN') {
-                            currentEvent = key;
-                            if (key === 'OCCU') {
-                                individuals[currentId].occupation = val.trim();
-                            }
-                        } else if (key === 'FACT') {
-                            lastFactValue = val.trim();
-                        } else if (key === 'OBJE') {
-                            individuals[currentId].media.push(val.trim());
-                        }
-                    } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
-                        if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
-                        if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
-                        if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
-                        if (key === 'MARR') {
-                            currentEvent = 'MARR';
-                        } else if (key === 'EVEN') {
-                            families[currentFamilyId].sharedEventRef = val.replace(/@/g, '').trim();
-                        }
-                    } else if (currentType === 'EVEN' && currentEventId && sharedEvents[currentEventId]) {
-                        if (key === 'TYPE') sharedEvents[currentEventId].type = val.trim().toLowerCase();
-                    } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
-                        if (key === 'FILE') {
-                            mediaFiles[currentId].file = val.replace(/["']/g, '').trim();
-                        } else if (key === 'TITL') {
-                            mediaFiles[currentId].title = val.trim();
-                        }
-                    }
-                } else if (level === 2) {
-                    if (currentType === 'INDI' && currentId && individuals[currentId]) {
-                        if (currentNameObj && key === 'TYPE') {
-                            currentNameObj.type = val.trim().toLowerCase();
-                        }
-                        if (key === 'TYPE') {
-                            if (val.trim() === 'Další bydliště' && lastFactValue) {
-                                individuals[currentId].residence = lastFactValue;
-                            }
-                        }
-                        if (currentEvent === 'BIRT') {
-                            if (key === 'DATE') individuals[currentId].birthDate = formatGedcomDate(val.trim());
-                            if (key === 'PLAC') individuals[currentId].birthPlace = val.trim();
-                        }
-                        if (currentEvent === 'DEAT') {
-                            if (key === 'DATE') individuals[currentId].deathDate = formatGedcomDate(val.trim());
-                            if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
-                        }
-                        if (currentEvent === 'MARR') {
-                            if (key === 'DATE') individuals[currentId].marriageDate = formatGedcomDate(val.trim());
-                            if (key === 'PLAC') individuals[currentId].marriagePlace = val.trim();
-                        }
-                    } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
-                        if (currentEvent === 'MARR') {
-                            if (key === 'DATE') families[currentFamilyId].marriageDate = formatGedcomDate(val.trim());
-                            if (key === 'PLAC') families[currentFamilyId].marriagePlace = val.trim();
-                        }
-                    } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
-                        if (key === 'TITL') {
-                            mediaFiles[currentId].title = val.trim();
-                        }
-                    }
-                }
-            });
-
-            setStatus("Krok 3/6: Propojuji vazby a jména...");
-            Object.values(individuals).forEach(p => {
-                p.resolvedMedia = p.media.map(mRef => {
-                    let cleanRef = mRef.replace(/@/g, '').trim();
-                    if (mediaFiles['@' + cleanRef + '@']) {
-                        let mObj = mediaFiles['@' + cleanRef + '@'];
-                        return { file: mObj.file, title: mObj.title };
+            if (level === 0) {
+                currentEvent = null;
+                currentNameObj = null;
+                currentEventId = null;
+                lastFactValue = null;
+                if (key.startsWith('@') && key.endsWith('@')) {
+                    if (val === 'INDI') {
+                        currentId = key;
+                        individuals[currentId] = { 
+                            id: currentId, firstName: '', marriedName: '', birthName: '', sex: 'U',
+                            birthDate: '', birthPlace: '', deathDate: '', deathPlace: '',
+                            occupation: '', residence: '', marriageDate: '', marriagePlace: '', hasSingleFamily: false, parents: [], children: [], spouses: [], media: [], families: [] 
+                        };
+                        currentFamilyId = null;
+                        currentType = 'INDI';
+                    } else if (val === 'FAM') {
+                        currentFamilyId = key;
+                        families[currentFamilyId] = { 
+                            id: currentFamilyId, husb: null, wife: null, children: [], 
+                            marriageDate: '', marriagePlace: '', sharedEventRef: null 
+                        };
+                        currentId = null;
+                        currentType = 'FAM';
+                    } else if (val === 'EVEN') {
+                        currentEventId = key;
+                        sharedEvents[currentEventId] = { id: currentEventId, type: '', date: '', place: '' };
+                        currentType = 'EVEN';
+                    } else if (val === 'OBJE') {
+                        currentId = key;
+                        mediaFiles[currentId] = { id: currentId, file: '', title: '' };
+                        currentType = 'OBJE';
                     } else {
-                        return { file: mRef, title: '' };
-                    }
-                });
-
-                if (p.allNames && p.allNames.length > 0) {
-                    let married = p.allNames.find(n => n.type.includes('manžel') || n.type.includes('married'));
-                    let birth = p.allNames.find(n => n.type.includes('rodn') || n.type.includes('birth'));
-
-                    if (!married && p.allNames.length > 0) married = p.allNames[0];
-                    if (!birth && p.allNames.length > 1) birth = p.allNames[1];
-
-                    p.marriedName = married ? married.fullName : p.allNames[0].fullName;
-                    p.birthName = birth ? birth.fullName : '';
-                } else {
-                    p.marriedName = 'Neznámý';
-                }
-
-                p.displayName = p.marriedName;
-                p.detailName = (p.birthName && p.birthName !== p.marriedName) ? `${p.marriedName} (roz. ${p.birthName})` : p.marriedName;
-            });
-
-            Object.values(families).forEach(fam => {
-                let husb = fam.husb && individuals[fam.husb] ? fam.husb : null;
-                let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
-                let kids = fam.children.filter(c => c && individuals[c]);
-
-                if ((husb && !wife) || (!husb && wife)) {
-                    let singleParentId = husb || wife;
-                    if (kids.length > 0) {
-                        individuals[singleParentId].hasSingleFamily = true;
+                        currentId = null;
+                        currentFamilyId = null;
+                        currentType = null;
                     }
                 }
-
-                let mDate = fam.marriageDate;
-                let mPlace = fam.marriagePlace;
-
-                if (!mDate && husb && individuals[husb].marriageDate) {
-                    mDate = individuals[husb].marriageDate;
-                    mPlace = individuals[husb].marriagePlace;
-                }
-                if (!mDate && wife && individuals[wife].marriageDate) {
-                    mDate = individuals[wife].marriageDate;
-                    mPlace = individuals[wife].marriagePlace;
-                }
-
-                let marriageInfo = { date: mDate, place: mPlace, familyId: fam.id };
-
-                if (husb && wife) {
-                    if (!individuals[husb].spouses.includes(wife)) individuals[husb].spouses.push(wife);
-                    if (!individuals[wife].spouses.includes(husb)) individuals[wife].spouses.push(husb);
-                    
-                    if (!individuals[husb].marriages) individuals[husb].marriages = {};
-                    if (!individuals[wife].marriages) individuals[wife].marriages = {};
-                    individuals[husb].marriages[wife] = marriageInfo;
-                    individuals[wife].marriages[husb] = marriageInfo;
-                }
-
-                let parents = [husb, wife].filter(p => p !== null);
-                
-                parents.forEach(pId => {
-                    if (!individuals[pId].families) individuals[pId].families = [];
-                    if (!individuals[pId].families.includes(fam.id)) individuals[pId].families.push(fam.id);
-                });
-
-                kids.forEach(childId => {
-                    parents.forEach(parentId => {
-                        if (!individuals[childId].parents.includes(parentId)) individuals[childId].parents.push(parentId);
-                        if (!individuals[parentId].children.includes(childId)) individuals[parentId].children.push(childId);
-                    });
-                });
-            });
-
-            globalIndividuals = individuals;
-
-            setStatus("Krok 4/6: Počítám generace stromu...");
-            let levels = {};
-            function assignLevels(personId, currentLevel, visited = new Set()) {
-                if (visited.has(personId)) return;
-                visited.add(personId);
-                
-                if (!(personId in levels) || currentLevel > levels[personId]) {
-                    levels[personId] = currentLevel;
-                }
-                
-                let person = individuals[personId];
-                if (!person) return;
-
-                person.spouses.forEach(spouseId => {
-                    if (!(spouseId in levels) || currentLevel > levels[spouseId]) {
-                        levels[spouseId] = currentLevel;
-                    }
-                });
-
-                person.children.forEach(childId => {
-                    assignLevels(childId, currentLevel + 1, new Set(visited));
-                });
-                
-                person.spouses.forEach(spouseId => {
-                    let spouse = individuals[spouseId];
-                    if (spouse) {
-                        spouse.children.forEach(childId => {
-                            assignLevels(childId, currentLevel + 1, new Set(visited));
-                        });
-                    }
-                });
-            }
-
-            let roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý' && p.parents.length === 0);
-            if (roots.length === 0) roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý');
-
-            roots.forEach(root => assignLevels(root.id, 0));
-
-            Object.values(individuals).forEach(p => {
-                if (p.marriedName !== 'Neznámý' && !(p.id in levels)) levels[p.id] = 0;
-            });
-
-            setStatus("Krok 5/6: Skládám rozvržení uzlů...");
-            let mainLineIds = new Set();
-            let maxLevel = Object.values(levels).length > 0 ? Math.max(...Object.values(levels)) : 0;
-            let bottomPersons = Object.values(individuals).filter(p => levels[p.id] === maxLevel);
-            
-            function traceAncestorsUp(personId, visitedTrace = new Set()) {
-                if (!personId || mainLineIds.has(personId) || visitedTrace.has(personId)) return;
-                visitedTrace.add(personId);
-                mainLineIds.add(personId);
-                
-                let p = individuals[personId];
-                if (!p) return;
-                
-                p.spouses.forEach(spouseId => {
-                    mainLineIds.add(spouseId);
-                });
-                
-                p.parents.forEach(parentId => {
-                    traceAncestorsUp(parentId, visitedTrace);
-                });
-            }
-
-            bottomPersons.forEach(p => traceAncestorsUp(p.id));
-
-            let genGroups = {};
-            Object.values(individuals).forEach(p => {
-                if (p.marriedName === 'Neznámý') return;
-                if (!mainLineIds.has(p.id)) return;
-                
-                let lvl = levels[p.id] || 0;
-                if (!genGroups[lvl]) genGroups[lvl] = [];
-                genGroups[lvl].push(p);
-            });
-
-            let nodes = [];
-            let nodeMap = {};
-            let rowHeight = 145;
-            let colWidth = 190;
-
-            Object.keys(genGroups).sort((a,b) => a - b).forEach(lvl => {
-                let personsInGen = genGroups[lvl];
-                
-                let orderedPersons = [];
-                let processed = new Set();
-
-                personsInGen.forEach(p => {
-                    if (processed.has(p.id)) return;
-                    orderedPersons.push(p);
-                    processed.add(p.id);
-
-                    let spouseId = p.spouses.find(sId => personsInGen.some(sp => sp.id === sId) && !processed.has(sId));
-                    if (spouseId) {
-                        let spouse = individuals[spouseId];
-                        let first = p;
-                        let second = spouse;
-                        if (p.sex === 'F' && spouse.sex === 'M') {
-                            first = spouse;
-                            second = p;
+            } else if (level === 1) {
+                currentEvent = null;
+                if (currentType === 'INDI' && currentId && individuals[currentId]) {
+                    if (key === 'NAME') {
+                        currentNameObj = { fullName: val.replace(/\//g, '').trim(), type: '' };
+                        if (!individuals[currentId].allNames) individuals[currentId].allNames = [];
+                        individuals[currentId].allNames.push(currentNameObj);
+                    } else if (key === 'SEX') {
+                        individuals[currentId].sex = val.trim();
+                    } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU' || key === 'MARR' || key === 'EVEN') {
+                        currentEvent = key;
+                        if (key === 'OCCU') {
+                            individuals[currentId].occupation = val.trim();
                         }
-                        orderedPersons[orderedPersons.length - 1] = first;
-                        processed.add(first.id);
-                        orderedPersons.push(second);
-                        processed.add(second.id);
+                    } else if (key === 'FACT') {
+                        lastFactValue = val.trim();
+                    } else if (key === 'OBJE') {
+                        individuals[currentId].media.push(val.trim());
                     }
-                });
-
-                orderedPersons.forEach((p, index) => {
-                    let x = (index - orderedPersons.length / 2) * colWidth + colWidth / 2;
-                    let y = parseInt(lvl) * rowHeight + 60;
-
-                    let nodeObj = {
-                        id: p.id,
-                        name: p.displayName,
-                        detailName: p.detailName,
-                        sex: p.sex,
-                        birth: p.birthDate,
-                        birthPlace: p.birthPlace,
-                        death: p.deathDate,
-                        deathPlace: p.deathPlace,
-                        occupation: p.occupation,
-                        residence: p.residence,
-                        marriages: p.marriages || {},
-                        spouses: p.spouses,
-                        children: p.children,
-                        families: p.families,
-                        hasSingleFamily: p.hasSingleFamily,
-                        media: p.resolvedMedia,
-                        x: x,
-                        y: y
-                    };
-                    nodes.push(nodeObj);
-                    nodeMap[p.id] = nodeObj;
-                });
-            });
-
-            let links = [];
-            Object.values(families).forEach(fam => {
-                let husb = fam.husb && nodeMap[fam.husb] ? fam.husb : null;
-                let wife = fam.wife && nodeMap[fam.wife] ? fam.wife : null;
-                let kids = fam.children.filter(c => c && nodeMap[c]);
-
-                if (husb && wife) {
-                    links.push({ source: nodeMap[husb], target: nodeMap[wife], type: 'partner' });
+                } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
+                    if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
+                    if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
+                    if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
+                    if (key === 'MARR') {
+                        currentEvent = 'MARR';
+                    } else if (key === 'EVEN') {
+                        families[currentFamilyId].sharedEventRef = val.replace(/@/g, '').trim();
+                    }
+                } else if (currentType === 'EVEN' && currentEventId && sharedEvents[currentEventId]) {
+                    if (key === 'TYPE') sharedEvents[currentEventId].type = val.trim().toLowerCase();
+                } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
+                    if (key === 'FILE') {
+                        mediaFiles[currentId].file = val.replace(/["']/g, '').trim();
+                    } else if (key === 'TITL') {
+                        mediaFiles[currentId].title = val.trim();
+                    }
                 }
+            } else if (level === 2) {
+                if (currentType === 'INDI' && currentId && individuals[currentId]) {
+                    if (currentNameObj && key === 'TYPE') {
+                        currentNameObj.type = val.trim().toLowerCase();
+                    }
+                    if (key === 'TYPE') {
+                        if (val.trim() === 'Další bydliště' && lastFactValue) {
+                            individuals[currentId].residence = lastFactValue;
+                        }
+                    }
+                    if (currentEvent === 'BIRT') {
+                        if (key === 'DATE') individuals[currentId].birthDate = formatGedcomDate(val.trim());
+                        if (key === 'PLAC') individuals[currentId].birthPlace = val.trim();
+                    }
+                    if (currentEvent === 'DEAT') {
+                        if (key === 'DATE') individuals[currentId].deathDate = formatGedcomDate(val.trim());
+                        if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
+                    }
+                    if (currentEvent === 'MARR') {
+                        if (key === 'DATE') individuals[currentId].marriageDate = formatGedcomDate(val.trim());
+                        if (key === 'PLAC') individuals[currentId].marriagePlace = val.trim();
+                    }
+                } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
+                    if (currentEvent === 'MARR') {
+                        if (key === 'DATE') families[currentFamilyId].marriageDate = formatGedcomDate(val.trim());
+                        if (key === 'PLAC') families[currentFamilyId].marriagePlace = val.trim();
+                    }
+                } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
+                    if (key === 'TITL') {
+                        mediaFiles[currentId].title = val.trim();
+                    }
+                }
+            }
+        });
 
-                let parents = [husb, wife].filter(p => p !== null);
-                parents.forEach(parent => {
-                    kids.forEach(child => {
-                        links.push({ source: nodeMap[parent], target: nodeMap[child], type: 'parent' });
-                    });
-                });
+        setStatus("Krok 3/6: Propojuji vazby a jména...");
+        Object.values(individuals).forEach(p => {
+            p.resolvedMedia = p.media.map(mRef => {
+                let cleanRef = mRef.replace(/@/g, '').trim();
+                if (mediaFiles['@' + cleanRef + '@']) {
+                    let mObj = mediaFiles['@' + cleanRef + '@'];
+                    return { file: mObj.file, title: mObj.title };
+                } else {
+                    return { file: mRef, title: '' };
+                }
             });
 
-            setStatus("Krok 6/6: Kreslím graf...");
-            document.getElementById('loading').style.display = 'none';
-            drawStructuredTree(nodes, links);
-        } catch (err) {
-            setStatus("Chyba při zpracování: " + err.message, true);
-            console.error(err);
+            if (p.allNames && p.allNames.length > 0) {
+                let married = p.allNames.find(n => n.type.includes('manžel') || n.type.includes('married'));
+                let birth = p.allNames.find(n => n.type.includes('rodn') || n.type.includes('birth'));
+
+                if (!married && p.allNames.length > 0) married = p.allNames[0];
+                if (!birth && p.allNames.length > 1) birth = p.allNames[1];
+
+                p.marriedName = married ? married.fullName : p.allNames[0].fullName;
+                p.birthName = birth ? birth.fullName : '';
+            } else {
+                p.marriedName = 'Neznámý';
+            }
+
+            p.displayName = p.marriedName;
+            p.detailName = (p.birthName && p.birthName !== p.marriedName) ? `${p.marriedName} (roz. ${p.birthName})` : p.marriedName;
+        });
+
+        Object.values(families).forEach(fam => {
+            let husb = fam.husb && individuals[fam.husb] ? fam.husb : null;
+            let wife = fam.wife && individuals[fam.wife] ? fam.wife : null;
+            let kids = fam.children.filter(c => c && individuals[c]);
+
+            if ((husb && !wife) || (!husb && wife)) {
+                let singleParentId = husb || wife;
+                if (kids.length > 0) {
+                    individuals[singleParentId].hasSingleFamily = true;
+                }
+            }
+
+            let mDate = fam.marriageDate;
+            let mPlace = fam.marriagePlace;
+
+            if (!mDate && husb && individuals[husb].marriageDate) {
+                mDate = individuals[husb].marriageDate;
+                mPlace = individuals[husb].marriagePlace;
+            }
+            if (!mDate && wife && individuals[wife].marriageDate) {
+                mDate = individuals[wife].marriageDate;
+                mPlace = individuals[wife].marriagePlace;
+            }
+
+            let marriageInfo = { date: mDate, place: mPlace, familyId: fam.id };
+
+            if (husb && wife) {
+                if (!individuals[husb].spouses.includes(wife)) individuals[husb].spouses.push(wife);
+                if (!individuals[wife].spouses.includes(husb)) individuals[wife].spouses.push(husb);
+                
+                if (!individuals[husb].marriages) individuals[husb].marriages = {};
+                if (!individuals[wife].marriages) individuals[wife].marriages = {};
+                individuals[husb].marriages[wife] = marriageInfo;
+                individuals[wife].marriages[husb] = marriageInfo;
+            }
+
+            let parents = [husb, wife].filter(p => p !== null);
+            
+            parents.forEach(pId => {
+                if (!individuals[pId].families) individuals[pId].families = [];
+                if (!individuals[pId].families.includes(fam.id)) individuals[pId].families.push(fam.id);
+            });
+
+            kids.forEach(childId => {
+                parents.forEach(parentId => {
+                    if (!individuals[childId].parents.includes(parentId)) individuals[childId].parents.push(parentId);
+                    if (!individuals[parentId].children.includes(childId)) individuals[parentId].children.push(childId);
+                });
+            });
+        });
+
+        globalIndividuals = individuals;
+
+        setStatus("Krok 4/6: Počítám generace stromu...");
+        let levels = {};
+        function assignLevels(personId, currentLevel, visited = new Set()) {
+            if (visited.has(personId)) return;
+            visited.add(personId);
+            
+            if (!(personId in levels) || currentLevel > levels[personId]) {
+                levels[personId] = currentLevel;
+            }
+            
+            let person = individuals[personId];
+            if (!person) return;
+
+            person.spouses.forEach(spouseId => {
+                if (!(spouseId in levels) || currentLevel > levels[spouseId]) {
+                    levels[spouseId] = currentLevel;
+                }
+            });
+
+            person.children.forEach(childId => {
+                assignLevels(childId, currentLevel + 1, new Set(visited));
+            });
+            
+            person.spouses.forEach(spouseId => {
+                let spouse = individuals[spouseId];
+                if (spouse) {
+                    spouse.children.forEach(childId => {
+                        assignLevels(childId, currentLevel + 1, new Set(visited));
+                    });
+                }
+            });
         }
+
+        let roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý' && p.parents.length === 0);
+        if (roots.length === 0) roots = Object.values(individuals).filter(p => p.marriedName !== 'Neznámý');
+
+        roots.forEach(root => assignLevels(root.id, 0));
+
+        Object.values(individuals).forEach(p => {
+            if (p.marriedName !== 'Neznámý' && !(p.id in levels)) levels[p.id] = 0;
+        });
+
+        setStatus("Krok 5/6: Skládám rozvržení uzlů...");
+        let mainLineIds = new Set();
+        let maxLevel = Object.values(levels).length > 0 ? Math.max(...Object.values(levels)) : 0;
+        let bottomPersons = Object.values(individuals).filter(p => levels[p.id] === maxLevel);
+        
+        function traceAncestorsUp(personId, visitedTrace = new Set()) {
+            if (!personId || mainLineIds.has(personId) || visitedTrace.has(personId)) return;
+            visitedTrace.add(personId);
+            mainLineIds.add(personId);
+            
+            let p = individuals[personId];
+            if (!p) return;
+            
+            p.spouses.forEach(spouseId => {
+                mainLineIds.add(spouseId);
+            });
+            
+            p.parents.forEach(parentId => {
+                traceAncestorsUp(parentId, visitedTrace);
+            });
+        }
+
+        bottomPersons.forEach(p => traceAncestorsUp(p.id));
+
+        let genGroups = {};
+        Object.values(individuals).forEach(p => {
+            if (p.marriedName === 'Neznámý') return;
+            if (!mainLineIds.has(p.id)) return;
+            
+            let lvl = levels[p.id] || 0;
+            if (!genGroups[lvl]) genGroups[lvl] = [];
+            genGroups[lvl].push(p);
+        });
+
+        let nodes = [];
+        let nodeMap = {};
+        let rowHeight = 145;
+        let colWidth = 190;
+
+        Object.keys(genGroups).sort((a,b) => a - b).forEach(lvl => {
+            let personsInGen = genGroups[lvl];
+            
+            let orderedPersons = [];
+            let processed = new Set();
+
+            personsInGen.forEach(p => {
+                if (processed.has(p.id)) return;
+                orderedPersons.push(p);
+                processed.add(p.id);
+
+                let spouseId = p.spouses.find(sId => personsInGen.some(sp => sp.id === sId) && !processed.has(sId));
+                if (spouseId) {
+                    let spouse = individuals[spouseId];
+                    let first = p;
+                    let second = spouse;
+                    if (p.sex === 'F' && spouse.sex === 'M') {
+                        first = spouse;
+                        second = p;
+                    }
+                    orderedPersons[orderedPersons.length - 1] = first;
+                    processed.add(first.id);
+                    orderedPersons.push(second);
+                    processed.add(second.id);
+                }
+            });
+
+            orderedPersons.forEach((p, index) => {
+                let x = (index - orderedPersons.length / 2) * colWidth + colWidth / 2;
+                let y = parseInt(lvl) * rowHeight + 60;
+
+                let nodeObj = {
+                    id: p.id,
+                    name: p.displayName,
+                    detailName: p.detailName,
+                    sex: p.sex,
+                    birth: p.birthDate,
+                    birthPlace: p.birthPlace,
+                    death: p.deathDate,
+                    deathPlace: p.deathPlace,
+                    occupation: p.occupation,
+                    residence: p.residence,
+                    marriages: p.marriages || {},
+                    spouses: p.spouses,
+                    children: p.children,
+                    families: p.families,
+                    hasSingleFamily: p.hasSingleFamily,
+                    media: p.resolvedMedia,
+                    x: x,
+                    y: y
+                };
+                nodes.push(nodeObj);
+                nodeMap[p.id] = nodeObj;
+            });
+        });
+
+        let links = [];
+        Object.values(families).forEach(fam => {
+            let husb = fam.husb && nodeMap[fam.husb] ? fam.husb : null;
+            let wife = fam.wife && nodeMap[fam.wife] ? fam.wife : null;
+            let kids = fam.children.filter(c => c && nodeMap[c]);
+
+            if (husb && wife) {
+                links.push({ source: nodeMap[husb], target: nodeMap[wife], type: 'partner' });
+            }
+
+            let parents = [husb, wife].filter(p => p !== null);
+            parents.forEach(parent => {
+                kids.forEach(child => {
+                    links.push({ source: nodeMap[parent], target: nodeMap[child], type: 'parent' });
+                });
+            });
+        });
+
+        setStatus("Krok 6/6: Kreslím graf...");
+        document.getElementById('loading').style.display = 'none';
+        drawStructuredTree(nodes, links);
     }, 50);
 }
 
@@ -618,6 +616,7 @@ function drawStructuredTree(nodes, links) {
     const svg = d3.select("#tree-svg");
     const container = document.getElementById('canvas');
     const width = container.clientWidth;
+    const height = container.clientHeight;
 
     svg.selectAll("*").remove();
 
@@ -632,7 +631,7 @@ function drawStructuredTree(nodes, links) {
     svg.call(zoom);
     svg.call(zoom.transform, d3.zoomIdentity.translate(width / 2, 40).scale(0.8));
 
-    g.append("g")
+    const link = g.append("g")
         .selectAll("path")
         .data(links)
         .enter().append("path")
@@ -729,15 +728,15 @@ function showDetails(person) {
             let spouseName = spouseObj ? (spouseObj.detailName || spouseObj.displayName) : "Neznámý partner";
             let mInfo = person.marriages && person.marriages[spouseId] ? person.marriages[spouseId] : null;
 
-            let datePart = "";
+            let detailsPart = "";
             if (mInfo && mInfo.date) {
-                datePart = `\u{1F48D} ${mInfo.date}`;
-                if (mInfo.place) datePart += ` (${mInfo.place})`;
+                detailsPart = mInfo.date;
+                if (mInfo.place) detailsPart += ` (${mInfo.place})`;
             } else {
-                datePart = `\u{1F48D} datum neuvedeno`;
+                detailsPart = "datum neuvedeno";
             }
 
-            marEntries.push(`<strong>${spouseName}</strong> — ${datePart}`);
+            marEntries.push(`<strong>${spouseName}</strong> — ${detailsPart}`);
         });
 
         marVal.innerHTML = marEntries.join('<br>');
@@ -861,3 +860,145 @@ function handleImageWheel(event) {
     }
     updateImageTransform();
 }
+
+function startImageDrag(event) {
+    if (event.button === 0) {
+        isDragging = true;
+        hasMoved = false;
+        startX = event.clientX - translateX;
+        startY = event.clientY - translateY;
+        
+        window.addEventListener('mousemove', imageDrag);
+        window.addEventListener('mouseup', endImageDrag);
+        
+        event.stopPropagation();
+    }
+}
+
+function imageDrag(event) {
+    if (!isDragging) return;
+    event.preventDefault();
+    let newX = event.clientX - startX;
+    let newY = event.clientY - startY;
+    
+    if (Math.abs(newX - translateX) > 2 || Math.abs(newY - translateY) > 2) {
+        hasMoved = true;
+    }
+    
+    translateX = newX;
+    translateY = newY;
+    updateImageTransform();
+}
+
+function endImageDrag() {
+    isDragging = false;
+    window.removeEventListener('mousemove', imageDrag);
+    window.removeEventListener('mouseup', endImageDrag);
+}
+
+function resetImageZoom(event) {
+    event.stopPropagation();
+    currentScale = 1;
+    translateX = 0;
+    translateY = 0;
+    hasMoved = true; 
+    updateImageTransform();
+}
+
+function handleImageClick(event) {
+    event.stopPropagation();
+    if (currentScale === 1 && !hasMoved) {
+        closeLightbox();
+    }
+    hasMoved = false;
+}
+
+function updateImageTransform() {
+    const img = document.getElementById('lightbox-img');
+    img.style.transform = `translate(${translateX}px, ${translateY}px) scale(${currentScale})`;
+}
+
+function handleLightboxClick(event) {
+    if (event.target.id === 'lightbox' || event.target.id === 'lightbox-content-box' || event.target.id === 'lightbox-video') {
+        closeLightbox();
+    }
+}
+
+function openImageLightbox(imgSrc, captionText) {
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightbox-img');
+    const lightboxVideo = document.getElementById('lightbox-video');
+    const lightboxCaption = document.getElementById('lightbox-caption');
+
+    lightboxVideo.style.display = 'none';
+    lightboxVideo.pause();
+    lightboxVideo.src = '';
+
+    currentScale = 1;
+    translateX = 0;
+    translateY = 0;
+    hasMoved = false;
+    lightboxImg.style.transform = 'translate(0px, 0px) scale(1)';
+
+    lightboxImg.style.display = 'block';
+    lightboxImg.src = imgSrc;
+    lightboxCaption.innerText = captionText;
+    lightbox.style.display = 'flex';
+}
+
+function openVideoLightbox(videoSrc, captionText) {
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImg = document.getElementById('lightbox-img');
+    const lightboxVideo = document.getElementById('lightbox-video');
+    const lightboxCaption = document.getElementById('lightbox-caption');
+
+    lightboxImg.style.display = 'none';
+    lightboxImg.src = '';
+
+    currentScale = 1;
+    translateX = 0;
+    translateY = 0;
+    hasMoved = false;
+
+    lightboxVideo.style.display = 'block';
+    lightboxVideo.src = videoSrc;
+    lightboxVideo.currentTime = 0;
+    lightboxVideo.play();
+
+    lightboxCaption.innerText = captionText;
+    lightbox.style.display = 'flex';
+}
+
+function closeLightbox() {
+    const lightboxVideo = document.getElementById('lightbox-video');
+    lightboxVideo.pause();
+    lightboxVideo.src = '';
+    lightboxVideo.style.display = 'none';
+
+    const lightboxImg = document.getElementById('lightbox-img');
+    lightboxImg.style.display = 'none';
+    lightboxImg.src = '';
+    currentScale = 1;
+    translateX = 0;
+    translateY = 0;
+    hasMoved = false;
+    lightboxImg.style.transform = 'translate(0px, 0px) scale(1)';
+    
+    const viewport = document.querySelector('meta[name="viewport"]');
+    if (viewport) {
+        viewport.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0');
+        setTimeout(() => {
+            viewport.setAttribute('content', 'width=device-width, initial-scale=1.0');
+        }, 50);
+    }
+    
+    document.getElementById('lightbox').style.display = 'none';
+}
+
+function closeModal() {
+    document.getElementById('sidebar').classList.remove('active-modal');
+}
+</script>
+
+</body>
+</html>
