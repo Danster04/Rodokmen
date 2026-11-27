@@ -147,10 +147,6 @@
                     <div class="detail-label">Multimédia / Videa / Fotky</div>
                     <div id="det-media"></div>
                 </div>
-                <div class="detail-item">
-                    <div class="detail-label">ID v databázi</div>
-                    <div class="detail-value" id="det-id" style="font-family: monospace; font-size: 0.85rem; color: #95a5a6;">-</div>
-                </div>
             </div>
         </div>
     </div>
@@ -708,7 +704,6 @@ function showDetails(person) {
     document.getElementById('det-death').innerText = deathText;
 
     document.getElementById('det-name').innerText = person.detailName || "Neuvedeno";
-    document.getElementById('det-id').innerText = person.id;
 
     const occItem = document.getElementById('item-occupation');
     const occVal = document.getElementById('det-occupation');
