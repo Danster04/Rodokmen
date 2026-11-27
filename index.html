@@ -315,4 +315,85 @@ function processGedcomData(text) {
                         } else if (key === 'BIRT' || key === 'DEAT' || key === 'OCCU' || key === 'MARR' || key === 'EVEN') {
                             currentEvent = key;
                             if (key === 'OCCU') {
-                                individuals[currentId].
+                                individuals[currentId].occupation = val.trim();
+                            }
+                        } else if (key === 'FACT') {
+                            lastFactValue = val.trim();
+                        } else if (key === 'OBJE') {
+                            individuals[currentId].media.push(val.trim());
+                        }
+                    } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
+                        if (key === 'HUSB') families[currentFamilyId].husb = val.trim();
+                        if (key === 'WIFE') families[currentFamilyId].wife = val.trim();
+                        if (key === 'CHIL') families[currentFamilyId].children.push(val.trim());
+                        if (key === 'MARR') {
+                            currentEvent = 'MARR';
+                        } else if (key === 'EVEN') {
+                            families[currentFamilyId].sharedEventRef = val.replace(/@/g, '').trim();
+                        }
+                    } else if (currentType === 'EVEN' && currentEventId && sharedEvents[currentEventId]) {
+                        if (key === 'TYPE') sharedEvents[currentEventId].type = val.trim().toLowerCase();
+                    } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
+                        if (key === 'FILE') {
+                            mediaFiles[currentId].file = val.replace(/["']/g, '').trim();
+                        } else if (key === 'TITL') {
+                            mediaFiles[currentId].title = val.trim();
+                        }
+                    }
+                } else if (level === 2) {
+                    if (currentType === 'INDI' && currentId && individuals[currentId]) {
+                        if (currentNameObj && key === 'TYPE') {
+                            currentNameObj.type = val.trim().toLowerCase();
+                        }
+                        if (key === 'TYPE') {
+                            if (val.trim() === 'Další bydliště' && lastFactValue) {
+                                individuals[currentId].residence = lastFactValue;
+                            }
+                        }
+                        if (currentEvent === 'BIRT') {
+                            if (key === 'DATE') individuals[currentId].birthDate = formatGedcomDate(val.trim());
+                            if (key === 'PLAC') individuals[currentId].birthPlace = val.trim();
+                        }
+                        if (currentEvent === 'DEAT') {
+                            if (key === 'DATE') individuals[currentId].deathDate = formatGedcomDate(val.trim());
+                            if (key === 'PLAC') individuals[currentId].deathPlace = val.trim();
+                        }
+                        if (currentEvent === 'MARR') {
+                            if (key === 'DATE') individuals[currentId].marriageDate = formatGedcomDate(val.trim());
+                            if (key === 'PLAC') individuals[currentId].marriagePlace = val.trim();
+                        }
+                    } else if (currentType === 'FAM' && currentFamilyId && families[currentFamilyId]) {
+                        if (currentEvent === 'MARR') {
+                            if (key === 'DATE') families[currentFamilyId].marriageDate = formatGedcomDate(val.trim());
+                            if (key === 'PLAC') families[currentFamilyId].marriagePlace = val.trim();
+                        }
+                    } else if (currentType === 'OBJE' && currentId && mediaFiles[currentId]) {
+                        if (key === 'TITL') {
+                            mediaFiles[currentId].title = val.trim();
+                        }
+                    }
+                }
+            });
+
+            setStatus("Krok 3/6: Propojuji vazby a jména...");
+            Object.values(individuals).forEach(p => {
+                p.resolvedMedia = p.media.map(mRef => {
+                    let cleanRef = mRef.replace(/@/g, '').trim();
+                    if (mediaFiles['@' + cleanRef + '@']) {
+                        let mObj = mediaFiles['@' + cleanRef + '@'];
+                        return { file: mObj.file, title: mObj.title };
+                    } else {
+                        return { file: mRef, title: '' };
+                    }
+                });
+
+                if (p.allNames && p.allNames.length > 0) {
+                    let married = p.allNames.find(n => n.type.includes('manžel') || n.type.includes('married'));
+                    let birth = p.allNames.find(n => n.type.includes('rodn') || n.type.includes('birth'));
+
+                    if (!married && p.allNames.length > 0) married = p.allNames[0];
+                    if (!birth && p.allNames.length > 1) birth = p.allNames[1];
+
+                    p.marriedName = married ? married.fullName : p.allNames[0].fullName;
+                    p.birthName = birth ? birth.fullName : '';
+                } else {
