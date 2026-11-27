@@ -135,6 +135,10 @@
                     <div class="detail-label" id="label-marriage">Manželství</div>
                     <div class="detail-value" id="det-marriage" style="line-height: 1.4;">Neuvedeno</div>
                 </div>
+                <div class="detail-item" id="item-siblings" style="display:none;">
+                    <div class="detail-label" id="label-siblings">Sourozenci</div>
+                    <div class="detail-value" id="det-siblings">-</div>
+                </div>
                 <div class="detail-item" id="item-children" style="display:none;">
                     <div class="detail-label" id="label-children">Děti</div>
                     <div class="detail-value" id="det-children">-</div>
@@ -277,7 +281,7 @@ function processGedcomData(text) {
                             individuals[currentId] = { 
                                 id: currentId, firstName: '', marriedName: '', birthName: '', sex: 'U',
                                 birthDate: '', birthPlace: '', deathDate: '', deathPlace: '',
-                                occupation: '', residence: '', marriageDate: '', marriagePlace: '', hasSingleFamily: false, parents: [], children: [], spouses: [], media: [], families: [] 
+                                occupation: '', residence: '', marriageDate: '', marriagePlace: '', hasSingleFamily: false, parents: [], children: [], siblings: [], spouses: [], media: [], families: [] 
                             };
                             currentFamilyId = null;
                             currentType = 'INDI';
@@ -453,6 +457,15 @@ function processGedcomData(text) {
                         if (!individuals[parentId].children.includes(childId)) individuals[parentId].children.push(childId);
                     });
                 });
+
+                // Sourozenci ze společné rodiny
+                kids.forEach(k1 => {
+                    kids.forEach(k2 => {
+                        if (k1 !== k2 && !individuals[k1].siblings.includes(k2)) {
+                            individuals[k1].siblings.push(k2);
+                        }
+                    });
+                });
             });
 
             globalIndividuals = individuals;
@@ -582,6 +595,7 @@ function processGedcomData(text) {
                         residence: p.residence,
                         marriages: p.marriages || {},
                         spouses: p.spouses,
+                        siblings: p.siblings || [],
                         children: p.children,
                         families: p.families,
                         hasSingleFamily: p.hasSingleFamily,
@@ -758,6 +772,49 @@ function showDetails(person) {
         marItem.style.display = 'none';
     }
 
+    // Sourozenci
+    const sibItem = document.getElementById('item-siblings');
+    const sibVal = document.getElementById('det-siblings');
+    sibVal.innerHTML = '';
+
+    let allSiblingIds = person.siblings || [];
+    if (allSiblingIds.length > 0) {
+        allSiblingIds.forEach(sId => {
+            let sibObj = globalIndividuals[sId];
+            if (sibObj) {
+                let link = document.createElement('a');
+                link.className = 'sibling-link';
+                let dates = [];
+                if (sibObj.birthDate) dates.push(`* ${sibObj.birthDate}`);
+                if (sibObj.deathDate) dates.push(`† ${sibObj.deathDate}`);
+                let txt = sibObj.displayName + (dates.length > 0 ? ` (${dates.join(', ')})` : "");
+                link.innerText = txt;
+                link.onclick = () => showDetails({
+                    id: sibObj.id,
+                    name: sibObj.displayName,
+                    detailName: sibObj.detailName,
+                    sex: sibObj.sex,
+                    birth: sibObj.birthDate,
+                    birthPlace: sibObj.birthPlace,
+                    death: sibObj.deathDate,
+                    deathPlace: sibObj.deathPlace,
+                    occupation: sibObj.occupation,
+                    residence: sibObj.residence,
+                    marriages: sibObj.marriages || {},
+                    spouses: sibObj.spouses,
+                    siblings: sibObj.siblings || [],
+                    children: sibObj.children,
+                    hasSingleFamily: sibObj.hasSingleFamily,
+                    media: sibObj.resolvedMedia
+                });
+                sibVal.appendChild(link);
+            }
+        });
+        sibItem.style.display = 'block';
+    } else {
+        sibItem.style.display = 'none';
+    }
+
     const childItem = document.getElementById('item-children');
     const childLabel = document.getElementById('label-children');
     const childVal = document.getElementById('det-children');
@@ -788,6 +845,7 @@ function showDetails(person) {
                     residence: childObj.residence,
                     marriages: childObj.marriages || {},
                     spouses: childObj.spouses,
+                    siblings: childObj.siblings || [],
                     children: childObj.children,
                     hasSingleFamily: childObj.hasSingleFamily,
                     media: childObj.resolvedMedia
