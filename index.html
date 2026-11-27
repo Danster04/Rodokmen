@@ -53,7 +53,7 @@
         /* Lightbox okno */
         #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; width: 100dvw; height: 100dvh; background: rgba(0,0,0,0.98); z-index: 2000; justify-content: center; align-items: center; flex-direction: column; box-sizing: border-box; cursor: pointer; }
         
-        #lightbox-content-box { position: relative; width: 100vw; height: 100vh; width: 100dvw; height: 100dvh; display: flex; justify-content: center; align-items: center; box-sizing: border-box; padding: 30px 10px 40px 10px; overflow: hidden; }
+        #lightbox-content-box { position: relative; width: 100vw; height: 100vh; width: 100dvw; height: 100dvw; display: flex; justify-content: center; align-items: center; box-sizing: border-box; padding: 30px 10px 40px 10px; overflow: hidden; }
         
         /* Interaktivní fotka */
         #lightbox img { max-width: 100vw; max-height: 90vh; border-radius: 4px; object-fit: contain; cursor: grab; user-select: none; transform-origin: center center; }
@@ -130,7 +130,7 @@
                 </div>
                 <div class="detail-item" id="item-marriage">
                     <div class="detail-label" id="label-marriage">Manželství</div>
-                    <div class="detail-value" id="det-marriage">Neuvedeno</div>
+                    <div class="detail-value" id="det-marriage" style="line-height: 1.4;">Neuvedeno</div>
                 </div>
                 <div class="detail-item" id="item-children" style="display:none;">
                     <div class="detail-label" id="label-children">Děti</div>
@@ -721,17 +721,25 @@ function showDetails(person) {
 
     if (person.spouses && person.spouses.length > 0) {
         marLabel.innerText = "Manželství";
-        let marTexts = [];
-        if (person.marriages) {
-            Object.values(person.marriages).forEach(m => {
-                if (m.date) {
-                    let mStr = m.date;
-                    if (m.place) mStr += ` (${m.place})`;
-                    marTexts.push(mStr);
-                }
-            });
-        }
-        marVal.innerText = marTexts.length > 0 ? marTexts.join('; ') : "Datum neuvedeno";
+        let marEntries = [];
+
+        person.spouses.forEach(spouseId => {
+            let spouseObj = globalIndividuals[spouseId];
+            let spouseName = spouseObj ? (spouseObj.detailName || spouseObj.displayName) : "Neznámý partner";
+            let mInfo = person.marriages && person.marriages[spouseId] ? person.marriages[spouseId] : null;
+
+            let detailsPart = "";
+            if (mInfo && mInfo.date) {
+                detailsPart = mInfo.date;
+                if (mInfo.place) detailsPart += ` (${mInfo.place})`;
+            } else {
+                detailsPart = "datum neuvedeno";
+            }
+
+            marEntries.push(`<strong>${spouseName}</strong> — ${detailsPart}`);
+        });
+
+        marVal.innerHTML = marEntries.join('<br>');
         marItem.style.display = 'block';
     } else if (person.hasSingleFamily) {
         marLabel.innerText = "Stav / Vztah";
